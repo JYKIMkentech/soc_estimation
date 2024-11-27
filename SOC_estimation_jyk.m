@@ -41,8 +41,7 @@ unique_soc = soc_values(b);           % unique_ocv : 1029x1
 %% Compute the derivative of OCV with respect to SOC
 dOCV_dSOC_values = gradient(unique_ocv) ./ gradient(unique_soc);
 
-% Apply moving average filter to smooth the derivative
-windowSize = 10; % Adjust the window size as needed
+windowSize = 10; 
 dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 2. Kalman filter setting
@@ -52,37 +51,37 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-6 0;
-            0   1e-15]; % [SOC ; V1] % State covariance
-P2_init = [1e-6 0       0;
-            0   1e-6    0;
-            0   0       1e-13]; % [SOC; V1; V2] % State covariance
+P1_init = [1e-18 0;
+            0   1e-17]; % [SOC ; V1] % State covariance
+P2_init = [1e-15 0       0;
+            0   1e-15    0;
+            0   0       1e-15]; % [SOC; V1; V2] % State covariance
 
-P3_init(1,1) = 1e-6;    % SOC의 초기 공분산
+P3_init(1,1) = 1e-3;    % SOC의 초기 공분산
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-6; % 각 V_i의 초기 공분산
+    P3_init(i,i) = 1e-1; % 각 V_i의 초기 공분산
 end
 
 
 % Q
 
-Q1 = [1e-17 0;
+Q1 = [1e-10 0;
              0  1e-15];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-17 0        0;
+Q2 = [1e-10 0        0;
              0     1e-15    0;
              0      0     1e-15]; % [SOC; V1; V2] % Process covariance
 
-Q3(1,1) = 1e-17; % SOC의 프로세스 노이즈
+Q3(1,1) = 1e-7; % SOC의 프로세스 노이즈
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-15; % 각 V_i의 프로세스 노이즈
+    Q3(i,i) = 1e-5; % 각 V_i의 프로세스 노이즈
 end
 
 % R , Measurement covariance
 
-R1 = 5.25e-1;
-R2 = 5.25e-1;
-R3 = 5.25e-1;
+R1 = 5.25e-3;
+R2 = 5.25e-3;
+R3 = 5.25e-2;
 
 %% 3. ECM parameter 추출
 
@@ -113,7 +112,7 @@ SOC_est_1RC_all = cell(num_trips, 1);
 SOC_est_2RC_all = cell(num_trips, 1);
 SOC_est_DRT_all = cell(num_trips, 1);
 
-for s = 1 : num_trips-14 % 각 Trip에 대해
+for s = 1 : num_trips-16 % 각 Trip에 대해
     fprintf('Processing Trip %d/%d...\n', s, num_trips-14);
 
     I = udds_data(s).I;
@@ -185,7 +184,7 @@ for s = 1 : num_trips-14 % 각 Trip에 대해
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
 
         % dOCV_dSOC 계산 (미리 계산된 값 사용)
-        dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values, SOC_pred, 'linear', 'extrap');
+        dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
         % Measurement matrix H
         H = zeros(1, 1 + num_RC);
@@ -259,7 +258,7 @@ for s = 1 : num_trips-14 % 각 Trip에 대해
 
         % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
-        dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values, SOC_pred, 'linear', 'extrap');
+        dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
         % Measurement matrix H
         H = [dOCV_dSOC, 1];
@@ -333,7 +332,7 @@ for s = 1 : num_trips-14 % 각 Trip에 대해
 
         % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
-        dOCV_dSOC = interp1(unique_soc,dOCV_dSOC_values, SOC_pred, 'linear', 'extrap');
+        dOCV_dSOC = interp1(unique_soc,dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
         % Measurement matrix H
         H = [dOCV_dSOC, 1, 1];
