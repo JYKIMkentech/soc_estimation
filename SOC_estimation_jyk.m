@@ -32,7 +32,7 @@ load('udds_data.mat'); % 구조체 배열 'udds_data'로 V, I, t, Time_duration,
 Q_batt = 2.7742; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-current_noise_percent = 0.02;
+current_noise_percent = 0.05;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values); % unique_soc : 1029x1
@@ -51,15 +51,15 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-18 0;
+P1_init = [1e-8 0;
             0   1e-17]; % [SOC ; V1] % State covariance
-P2_init = [1e-15 0       0;
+P2_init = [1e-5 0       0;
             0   1e-15    0;
             0   0       1e-15]; % [SOC; V1; V2] % State covariance
 
-P3_init(1,1) = 1e-3;    % SOC의 초기 공분산
+P3_init(1,1) = 1e-7;    % SOC의 초기 공분산
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-1; % 각 V_i의 초기 공분산
+    P3_init(i,i) = 1e-7; % 각 V_i의 초기 공분산
 end
 
 
@@ -69,8 +69,8 @@ Q1 = [1e-10 0;
              0  1e-15];  % [SOC ; V1] % Process covariance
 
 Q2 = [1e-10 0        0;
-             0     1e-15    0;
-             0      0     1e-15]; % [SOC; V1; V2] % Process covariance
+             0     1e-6    0;
+             0      0     1e-6]; % [SOC; V1; V2] % Process covariance
 
 Q3(1,1) = 1e-7; % SOC의 프로세스 노이즈
 for i = 2:(1 + num_RC)
