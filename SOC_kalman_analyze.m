@@ -54,9 +54,9 @@ num_RC = length(tau_discrete);
 P1_init = [1e-5 0;
            0   1e-5]; % [SOC ; V1] State Covariance
 
-P2_init = [1e-6 0       0;
-           0   1e-6    0;
-           0   0       1e-6]; % [SOC; V1; V2] State Covariance
+P2_init = [1e-3 0       0;
+           0   1e-3   0;
+           0   0       1e-3]; % [SOC; V1; V2] State Covariance
 
 P3_init = zeros(1 + num_RC); % DRT Model State Covariance
 P3_init(1,1) = 1e-7;    % Initial covariance for SOC
@@ -65,10 +65,10 @@ for i = 2:(1 + num_RC)
 end
 
 % Q Process Noise Covariance
-Q1 = [1e-5 0;
+Q1 = [1e-4 0;
       0    1e-5];  % [SOC ; V1] Process Noise
 
-Q2 = [1e-7  0        0;
+Q2 = [1e-4  0        0;
       0     1e-7    0;
       0      0     1e-7]; % [SOC; V1; V2] Process Noise
 
@@ -127,7 +127,7 @@ x_estimate_DRT_all = cell(num_trips, 1);
 K_DRT_all = cell(num_trips, 1);
 
 epsilon_percent_span = 0.1; % ±5% epsilon percentages
-sigma_percent = 0.01;        % 1% standard deviation
+sigma_percent = 0.001;        % 1% standard deviation
 
 for s = 1 : num_trips-16 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips-16);

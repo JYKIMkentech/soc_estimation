@@ -51,9 +51,9 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-5 0;
+P1_init = [1e-3 0;
             0   1e-5]; % [SOC ; V1] % State covariance
-P2_init = [1e-6 0        0;
+P2_init = [1e-3 0        0;
             0   1e-6    0;
             0   0       1e-6]; % [SOC; V1; V2] % State covariance
 
