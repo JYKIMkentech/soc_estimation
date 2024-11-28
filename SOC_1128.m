@@ -57,21 +57,22 @@ P2_init = [1e-6 0        0;
             0   1e-6    0;
             0   0       1e-6]; % [SOC; V1; V2] % State covariance
 
+P3_init = zeros(1 + num_RC);
 P3_init(1,1) = 1e-7;    % SOC의 초기 공분산
 for i = 2:(1 + num_RC)
     P3_init(i,i) = 1e-7; % 각 V_i의 초기 공분산
 end
-
 
 % Q
 
 Q1 = [1e-5 0;
       0  1e-5];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-3 0        0;
-             0     1e-3    0;
+Q2 = [1e-7 0        0;
+             0     1e-7    0;
              0      0     1e-7]; % [SOC; V1; V2] % Process covariance
 
+Q3 = zeros(1 + num_RC);
 Q3(1,1) = 1e-10; % SOC의 프로세스 노이즈
 for i = 2:(1 + num_RC)
     Q3(i,i) = 1e-10; % 각 V_i의 프로세스 노이즈
@@ -112,8 +113,18 @@ SOC_est_1RC_all = cell(num_trips, 1);
 SOC_est_2RC_all = cell(num_trips, 1);
 SOC_est_DRT_all = cell(num_trips, 1);
 
+% For storing additional data for plotting
+SOC_pred_DRT_all = cell(num_trips,1);
+K_DRT_all = cell(num_trips,1);
+
+SOC_pred_1RC_all = cell(num_trips,1);
+K_1RC_all = cell(num_trips,1);
+
+SOC_pred_2RC_all = cell(num_trips,1);
+K_2RC_all = cell(num_trips,1);
+
 for s = 1 : num_trips-16 % 각 Trip에 대해
-    fprintf('Processing Trip %d/%d...\n', s, num_trips-14);
+    fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     I = udds_data(s).I;
     V = udds_data(s).V;
@@ -147,9 +158,13 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
     SOC_est_DRT = zeros(length(t),1);
     V_DRT_est = zeros(length(t), num_RC); % 각 V_i 저장
 
+    % Initialize storage arrays for plotting
+    SOC_pred_DRT = zeros(length(t),1);
+    K_DRT = zeros(length(t),1);
+
     for k = 1:length(t) % k-1 --> k번째 시간 Prediction and correction
 
-        R0 = interp1(SOC_params, R0_params, SOC_estimate, 'linear', 'extrap');
+        R0 = R0_est_all(s);
 
         % predict step
 
@@ -168,7 +183,10 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         end
 
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
-        
+
+        % Store the predicted SOC
+        SOC_pred_DRT(k) = SOC_pred;
+
         x_pred = [SOC_pred; V_pred];
 
 
@@ -198,6 +216,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         S = H * P_pred * H' + R3; % Measurement noise covariance
         K = P_pred * H' / S;
 
+        % Store the Kalman gain for SOC
+        K_DRT(k) = K(1);
+
         % Update the estimate
         z = noisy_V(k); % Measurement
         x_estimate = x_pred + K * (z - V_pred_total);
@@ -215,9 +236,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         SOC_estimate = x_estimate(1);
     end
 
-        SOC_est_DRT_all{s} = SOC_est_DRT; 
-
-    
+    SOC_est_DRT_all{s} = SOC_est_DRT; 
+    SOC_pred_DRT_all{s} = SOC_pred_DRT;
+    K_DRT_all{s} = K_DRT;
 
 
     %% 1-RC
@@ -227,6 +248,10 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
 
     SOC_estimate = CC_SOC(1);
     P_estimate = P1_init;
+
+    % Initialize storage arrays for plotting
+    SOC_pred_1RC = zeros(length(t),1);
+    K_1RC = zeros(length(t),1);
 
     for k = 1:length(t)
 
@@ -247,6 +272,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
 
         % Predict SOC
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
+
+        % Store the predicted SOC
+        SOC_pred_1RC(k) = SOC_pred;
 
         % Form the predicted state vector
         x_pred = [SOC_pred; V1_pred];
@@ -270,6 +298,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         S = H * P_pred * H' + R1; % Measurement noise covariance
         K = P_pred * H' / S;
 
+        % Store the Kalman gain for SOC
+        K_1RC(k) = K(1);
+
         % Update the estimate
         z = noisy_V(k); % Measurement
         x_estimate = x_pred + K * (z - V_pred);
@@ -287,6 +318,8 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
     end
 
     SOC_est_1RC_all{s} = SOC_est_1RC;
+    SOC_pred_1RC_all{s} = SOC_pred_1RC;
+    K_1RC_all{s} = K_1RC;
 
     %% 2-RC
 
@@ -296,6 +329,10 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
 
     SOC_estimate = CC_SOC(1);
     P_estimate = P2_init;
+
+    % Initialize storage arrays for plotting
+    SOC_pred_2RC = zeros(length(t),1);
+    K_2RC = zeros(length(t),1);
 
     for k = 1:length(t)
 
@@ -321,6 +358,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         % Predict SOC
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
+        % Store the predicted SOC
+        SOC_pred_2RC(k) = SOC_pred;
+
         % Form the predicted state vector
         x_pred = [SOC_pred; V1_pred; V2_pred];
 
@@ -344,6 +384,9 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
         S = H * P_pred * H' + R2; % Measurement noise covariance
         K = P_pred * H' / S;
 
+        % Store the Kalman gain for SOC
+        K_2RC(k) = K(1);
+
         % Update the estimate
         z = noisy_V(k); % Measurement
         x_estimate = x_pred + K * (z - V_pred);
@@ -363,30 +406,77 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
     end
 
     SOC_est_2RC_all{s} = SOC_est_2RC;  
+    SOC_pred_2RC_all{s} = SOC_pred_2RC;
+    K_2RC_all{s} = K_2RC;
+
+    %% Plotting for the trip where SOC is dropping
+    % You can adjust 's' to select the trip you are interested in
+    if s == 1 % For example, plot for the first trip
+        t_plot = t;
+        True_SOC_plot = True_SOC;
+        
+        % Plot for DRT Model
+        figure;
+        subplot(2,1,1);
+        plot(t_plot, SOC_pred_DRT, 'b--', 'LineWidth', 1.5);
+        hold on;
+        plot(t_plot, SOC_est_DRT, 'r-', 'LineWidth', 1.5);
+        plot(t_plot, True_SOC_plot, 'k-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('Predicted SOC', 'Estimated SOC', 'True SOC');
+        title('DRT Model: SOC Prediction and Estimation');
+        grid on;
+
+        subplot(2,1,2);
+        plot(t_plot, K_DRT, 'g-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain');
+        title('DRT Model: Kalman Gain for SOC');
+        grid on;
+
+        % Plot for 1-RC Model
+        figure;
+        subplot(2,1,1);
+        plot(t_plot, SOC_pred_1RC, 'b--', 'LineWidth', 1.5);
+        hold on;
+        plot(t_plot, SOC_est_1RC, 'r-', 'LineWidth', 1.5);
+        plot(t_plot, True_SOC_plot, 'k-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('Predicted SOC', 'Estimated SOC', 'True SOC');
+        title('1-RC Model: SOC Prediction and Estimation');
+        grid on;
+
+        subplot(2,1,2);
+        plot(t_plot, K_1RC, 'g-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain');
+        title('1-RC Model: Kalman Gain for SOC');
+        grid on;
+
+        % Plot for 2-RC Model
+        figure;
+        subplot(2,1,1);
+        plot(t_plot, SOC_pred_2RC, 'b--', 'LineWidth', 1.5);
+        hold on;
+        plot(t_plot, SOC_est_2RC, 'r-', 'LineWidth', 1.5);
+        plot(t_plot, True_SOC_plot, 'k-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('Predicted SOC', 'Estimated SOC', 'True SOC');
+        title('2-RC Model: SOC Prediction and Estimation');
+        grid on;
+
+        subplot(2,1,2);
+        plot(t_plot, K_2RC, 'g-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain');
+        title('2-RC Model: Kalman Gain for SOC');
+        grid on;
+    end
 
 end
-
-
-
-%% Plot example for the first trip
-figure;
-plot(udds_data(1).t, CC_SOC_all{1}, 'b', 'LineWidth', 1.5);
-hold on;
-plot(udds_data(1).t, True_SOC_all{1}, 'k--', 'LineWidth', 1.5);
-plot(udds_data(1).t, SOC_est_1RC_all{1}, 'r', 'LineWidth', 1.5);
-plot(udds_data(1).t, SOC_est_2RC_all{1}, 'g', 'LineWidth', 1.5);
-plot(udds_data(1).t, SOC_est_DRT_all{1}, 'm-', 'LineWidth', 1.5);
-
-xlabel('Time [s]');
-ylabel('SOC');
-legend('Coulomb Counting SOC', 'True SOC', 'Estimated SOC (1-RC)', 'Estimated SOC (2-RC)', 'Estimated SOC (DRT)');
-title('SOC Estimation');
-grid on;
-
-
-
-
-
 
 %% Function for adding Markov noise
 function [noisy_I] = Markov(I, noise_percent)
@@ -417,31 +507,3 @@ function [noisy_I] = Markov(I, noise_percent)
     end
 
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

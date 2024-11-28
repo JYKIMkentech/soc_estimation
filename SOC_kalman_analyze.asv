@@ -1,7 +1,7 @@
 clc; clear; close all;
 
 %% Seed Setting
-%rng(13); 
+rng(13); 
 
 %% Font Size Settings
 axisFontSize = 14;
@@ -126,9 +126,6 @@ x_pred_DRT_all = cell(num_trips, 1);
 x_estimate_DRT_all = cell(num_trips, 1);
 K_DRT_all = cell(num_trips, 1);
 
-epsilon_percent_span = 0.1; % ±5% epsilon percentages
-sigma_percent = 0.01;        % 1% standard deviation
-
 for s = 1 : num_trips-16 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips-16);
 
@@ -139,7 +136,7 @@ for s = 1 : num_trips-16 % For each trip
     dt(1) = dt(2);
     Time_duration = udds_data(s).Time_duration; % All trips are consecutive
 
-    [noisy_I] = Markov(I, epsilon_percent_span, sigma_percent); % Updated function call
+    [noisy_I] = Markov(I, current_noise_percent); % Add Markov noise to current
     noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % Add Gaussian noise to voltage
 
     True_SOC = SOC_begin_true + cumtrapz(t,I)/(3600 * Q_batt); % True SOC (no noise)
@@ -522,32 +519,32 @@ title('SOC Estimation');
 grid on;
 
 
-%% Function to Add Markov Noise to the Current
-function [noisy_I] = Markov(I, epsilon_percent_span, sigma_percent)
+%% Function to Add Markov Noise to the Kalman Filter
+function [noisy_I] = Markov(I, noise_percent)
 
-    N = 51; % Number of states in the Markov chain
-    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -5% to +5%
-    sigma = sigma_percent; % Standard deviation in percentage (e.g., 0.01 for 1%)
+    noise_number = 50;
+    initial_state = randsample(1:noise_number, 1); % Randomly select initial state
+    mean_noise = mean(I) * noise_percent;
+    min_noise = min(I) * noise_percent; % Minimum noise
+    max_noise = max(I) * noise_percent; % Maximum noise
+    span = max_noise - min_noise; % Noise range
+    sigma = span / noise_number; % Standard deviation
+    noise_vector = linspace(mean_noise - span/2, mean_noise + span/2, noise_number); % Noise vector
+    P = zeros(noise_number);
 
-    % Initialize the transition probability matrix
-    P = zeros(N);
-    for i = 1:N
-        % Compute the transition probabilities to all other states
-        probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
-        P(i, :) = probabilities / sum(probabilities); % Normalize to sum to 1
+    for i = 1:noise_number
+        probabilities = normpdf(noise_vector, noise_vector(i), sigma); % Calculate probabilities
+        P(i, :) = probabilities / sum(probabilities); % Normalize to create probability matrix
     end
 
-    % Initialize the Markov chain
-    initial_state = randsample(1:N, 1); % Randomly select initial state
-    current_state = initial_state;
-
-    % Generate the noisy current
     noisy_I = zeros(size(I));
-    for k = 1:length(I)
-        epsilon = epsilon_vector(current_state);
-        noisy_I(k) = I(k) * (1 + epsilon); % Apply the epsilon percentage
-
-        % Transition to the next state
-        current_state = randsample(1:N, 1, true, P(current_state, :));
+    states = zeros(size(I));
+    current_state = initial_state;
+    
+    for m = 1:length(I)
+        noisy_I(m) = I(m) + noise_vector(current_state); % Add noise of the current state
+        states(m) = current_state;
+        current_state = randsample(1:noise_number, 1 , true, P(current_state, :)); % Transition to next state
     end
+
 end
