@@ -32,8 +32,8 @@ ocv_values = soc_ocv(:, 2);     % Corresponding OCV values [V] % 1083 x 1
 % Driving data (17 trips)
 load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
 
-Q_batt = 2.7742; % [Ah]
-SOC_begin_true = 0.9907;
+Q_batt = 2.7742 ; % 2.7742; % [Ah]
+SOC_begin_true = 0.9907; %0.983;
 SOC_begin_cc = 0.9907;
 epsilon_percent_span = 0.1;
 voltage_noise_percent = 0.01;
@@ -53,38 +53,38 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-10 0;
-            0   1e-10]; % [SOC ; V1] % State covariance
-P2_init = [1e-7 0        0;
-            0   1e-9   0;
-            0   0       1e-69]; % [SOC; V1; V2] % State covariance
+P1_init = [1e-9 0;
+            0   1e-9]; % [SOC ; V1] % State covariance
+P2_init = [1e-4 0        0;
+            0   1e-5 0;
+            0   0       1e-6]; % [SOC; V1; V2] % State covariance
 
 P3_init = zeros(1 + num_RC); % Initialize P3_init
-P3_init(1,1) = 1e-10;    % Initial covariance for SOC
+P3_init(1,1) = 1e-13;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-10; % Initial covariance for each V_i
+    P3_init(i,i) = 1e-13; % Initial covariance for each V_i
 end
 
 % Q
 
-Q1 = [1e-6 0;
-      0  1e-9];  % [SOC ; V1] % Process covariance
+Q1 = [1e-4 0;
+      0  1e-5];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-7 0        0;
-             0     1e-9    0;
-             0      0     1e-9]; % [SOC; V1; V2] % Process covariance
+Q2 = [1e-4 0        0;
+             0     1e-5    0;
+             0      0     1e-6]; % [SOC; V1; V2] % Process covariance
 
 Q3 = zeros(1 + num_RC); % Initialize Q3
-Q3(1,1) = 5e-10; % Process noise for SOC
+Q3(1,1) = 1e-13; %5e-10; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-9; % Process noise for each V_i
+    Q3(i,i) = 1e-13 ;% 1e-9; % Process noise for each V_i
 end
 
 % R , Measurement covariance
 
-R1 = 25e-6;
-R2 = 25e-6;
-R3 = 25e-3;
+R1 = 25e-4;
+R2 = 25e-4;
+R3 = 25e-4;
 
 %% 3. Extract ECM parameters
 
@@ -125,6 +125,22 @@ SOC_error_1RC_all = cell(num_trips,1);
 SOC_error_2RC_all = cell(num_trips,1);
 SOC_error_DRT_all = cell(num_trips,1);
 
+% Initialize cell arrays to store Kalman filter variables
+x_pred_1RC_all_trips = cell(num_trips, 1);
+x_estimate_1RC_all_trips = cell(num_trips, 1);
+K_1RC_all_trips = cell(num_trips, 1);
+residual_1RC_all_trips = cell(num_trips, 1);
+
+x_pred_2RC_all_trips = cell(num_trips, 1);
+x_estimate_2RC_all_trips = cell(num_trips, 1);
+K_2RC_all_trips = cell(num_trips, 1);
+residual_2RC_all_trips = cell(num_trips, 1);
+
+x_pred_DRT_all_trips = cell(num_trips, 1);
+x_estimate_DRT_all_trips = cell(num_trips, 1);
+K_DRT_all_trips = cell(num_trips, 1);
+residual_DRT_all_trips = cell(num_trips, 1);
+
 % Initialize estimates for all models
 % These will be updated after each trip
 SOC_estimate_DRT = SOC_begin_cc;
@@ -159,9 +175,9 @@ SOC_error_DRT_total = [];
 
 time_offset = 0; % To adjust time for concatenation
 
-for s = 1 : num_trips-1 % For each trip
-    fprintf('Processing Trip %d/%d...\n', s, num_trips-1);
-
+for s = 1 : num_trips-16 % For each trip
+    fprintf('Processing Trip %d/%d...\n', s, num_trips);
+    
     I = udds_data(s).I;
     V = udds_data(s).V;
     t = udds_data(s).t + time_offset; % Adjust time for concatenation
@@ -196,6 +212,12 @@ for s = 1 : num_trips-1 % For each trip
 
     SOC_est_DRT = zeros(length(t),1);
     V_DRT_est = zeros(length(t), num_RC); % Store V_i for each time step
+
+    % Initialize arrays to store Kalman filter variables
+    x_pred_DRT_all = zeros(length(t), 1 + num_RC);
+    x_estimate_DRT_all = zeros(length(t), 1 + num_RC);
+    K_DRT_all = zeros(length(t), 1 + num_RC);
+    residual_DRT_all = zeros(length(t), 1);
 
     for k = 1:length(t) % Prediction and correction for each time step
 
@@ -261,16 +283,32 @@ for s = 1 : num_trips-1 % For each trip
         V_estimate_DRT = x_estimate(2:end);
         V_DRT_est(k, :) = V_estimate_DRT';
 
+        % Store Kalman filter variables
+        x_pred_DRT_all(k, :) = x_pred';
+        x_estimate_DRT_all(k, :) = x_estimate';
+        K_DRT_all(k, :) = K';
+        residual_DRT_all(k) = z - V_pred_total;
+
         % Update the estimates for next iteration
         SOC_estimate_DRT = x_estimate(1);
     end
 
     SOC_est_DRT_all{s} = SOC_est_DRT; 
+    x_pred_DRT_all_trips{s} = x_pred_DRT_all;
+    x_estimate_DRT_all_trips{s} = x_estimate_DRT_all;
+    K_DRT_all_trips{s} = K_DRT_all;
+    residual_DRT_all_trips{s} = residual_DRT_all;
 
     %% 1-RC
 
     SOC_est_1RC = zeros(length(t), 1);
     V1_est_1RC = zeros(length(t), 1);
+
+    % Initialize arrays to store Kalman filter variables
+    x_pred_1RC_all = zeros(length(t), 2);
+    x_estimate_1RC_all = zeros(length(t), 2);
+    K_1RC_all = zeros(length(t), 2);
+    residual_1RC_all = zeros(length(t), 1);
 
     for k = 1:length(t)
 
@@ -327,18 +365,34 @@ for s = 1 : num_trips-1 % For each trip
         SOC_est_1RC(k) = x_estimate(1);
         V1_est_1RC(k) = x_estimate(2);
 
+        % Store Kalman filter variables
+        x_pred_1RC_all(k, :) = x_pred';
+        x_estimate_1RC_all(k, :) = x_estimate';
+        K_1RC_all(k, :) = K';
+        residual_1RC_all(k) = z - V_pred_total;
+
         % Update the estimates for next iteration
         SOC_estimate_1RC = x_estimate(1);
         V1_estimate_1RC = x_estimate(2);
     end
 
     SOC_est_1RC_all{s} = SOC_est_1RC;
+    x_pred_1RC_all_trips{s} = x_pred_1RC_all;
+    x_estimate_1RC_all_trips{s} = x_estimate_1RC_all;
+    K_1RC_all_trips{s} = K_1RC_all;
+    residual_1RC_all_trips{s} = residual_1RC_all;
 
     %% 2-RC
 
     SOC_est_2RC = zeros(length(t),1);
     V1_est_2RC = zeros(length(t),1);
     V2_est_2RC = zeros(length(t),1);
+
+    % Initialize arrays to store Kalman filter variables
+    x_pred_2RC_all = zeros(length(t), 3);
+    x_estimate_2RC_all = zeros(length(t), 3);
+    K_2RC_all = zeros(length(t), 3);
+    residual_2RC_all = zeros(length(t), 1);
 
     for k = 1:length(t)
         % Compute R0, R1, C1, R2, C2 at SOC_estimate_2RC
@@ -401,6 +455,12 @@ for s = 1 : num_trips-1 % For each trip
         V1_est_2RC(k) = x_estimate(2);
         V2_est_2RC(k) = x_estimate(3);
 
+        % Store Kalman filter variables
+        x_pred_2RC_all(k, :) = x_pred';
+        x_estimate_2RC_all(k, :) = x_estimate';
+        K_2RC_all(k, :) = K';
+        residual_2RC_all(k) = z - V_pred_total;
+
         % Update the estimates for next iteration
         SOC_estimate_2RC = x_estimate(1);
         V1_estimate_2RC = x_estimate(2);
@@ -408,6 +468,10 @@ for s = 1 : num_trips-1 % For each trip
     end
 
     SOC_est_2RC_all{s} = SOC_est_2RC;
+    x_pred_2RC_all_trips{s} = x_pred_2RC_all;
+    x_estimate_2RC_all_trips{s} = x_estimate_2RC_all;
+    K_2RC_all_trips{s} = K_2RC_all;
+    residual_2RC_all_trips{s} = residual_2RC_all;
     
     %% Calculate SOC errors for this trip
     SOC_error_CC = CC_SOC - True_SOC;
@@ -438,6 +502,163 @@ for s = 1 : num_trips-1 % For each trip
     set(gca, 'FontSize', axisFontSize);
     hold off;
     
+    %% Plot Kalman filter variables for the first trip
+    if s == 1
+        % DRT Model
+        x_pred_DRT = x_pred_DRT_all_trips{s};
+        x_estimate_DRT = x_estimate_DRT_all_trips{s};
+        K_DRT = K_DRT_all_trips{s};
+        residual_DRT = residual_DRT_all_trips{s};
+        
+        SOC_pred_DRT = x_pred_DRT(:, 1);
+        SOC_estimate_DRT = x_estimate_DRT(:, 1);
+        K_SOC_DRT = K_DRT(:, 1);
+
+        figure;
+        plot(t, SOC_pred_DRT, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, SOC_estimate_DRT, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('SOC Prediction', 'SOC Estimate');
+        title('DRT Model SOC Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, K_SOC_DRT, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain for SOC');
+        title('DRT Model Kalman Gain for SOC for Trip 1');
+        grid on;
+
+        figure;
+        plot(t, residual_DRT, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Residual');
+        title('DRT Model Residual for Trip 1');
+        grid on;
+
+        % 1RC Model
+        x_pred_1RC = x_pred_1RC_all_trips{s};
+        x_estimate_1RC = x_estimate_1RC_all_trips{s};
+        K_1RC = K_1RC_all_trips{s};
+        residual_1RC = residual_1RC_all_trips{s};
+
+        SOC_pred_1RC = x_pred_1RC(:, 1);
+        SOC_estimate_1RC = x_estimate_1RC(:, 1);
+        V1_pred_1RC = x_pred_1RC(:, 2);
+        V1_estimate_1RC = x_estimate_1RC(:, 2);
+        K_SOC_1RC = K_1RC(:, 1);
+        K_V1_1RC = K_1RC(:, 2);
+
+        figure;
+        plot(t, SOC_pred_1RC, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, SOC_estimate_1RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('SOC Prediction', 'SOC Estimate');
+        title('1RC Model SOC Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, V1_pred_1RC, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, V1_estimate_1RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('V1 [V]');
+        legend('V1 Prediction', 'V1 Estimate');
+        title('1RC Model V1 Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, K_SOC_1RC, '-', 'LineWidth', 1.5);
+        hold on;
+        plot(t, K_V1_1RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain');
+        legend('Kalman Gain for SOC', 'Kalman Gain for V1');
+        title('1RC Model Kalman Gains for Trip 1');
+        grid on;
+
+        figure;
+        plot(t, residual_1RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Residual');
+        title('1RC Model Residual for Trip 1');
+        grid on;
+
+        % 2RC Model
+        x_pred_2RC = x_pred_2RC_all_trips{s};
+        x_estimate_2RC = x_estimate_2RC_all_trips{s};
+        K_2RC = K_2RC_all_trips{s};
+        residual_2RC = residual_2RC_all_trips{s};
+
+        SOC_pred_2RC = x_pred_2RC(:, 1);
+        SOC_estimate_2RC = x_estimate_2RC(:, 1);
+        V1_pred_2RC = x_pred_2RC(:, 2);
+        V1_estimate_2RC = x_estimate_2RC(:, 2);
+        V2_pred_2RC = x_pred_2RC(:, 3);
+        V2_estimate_2RC = x_estimate_2RC(:, 3);
+        K_SOC_2RC = K_2RC(:, 1);
+        K_V1_2RC = K_2RC(:, 2);
+        K_V2_2RC = K_2RC(:, 3);
+
+        figure;
+        plot(t, SOC_pred_2RC, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, SOC_estimate_2RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('SOC');
+        legend('SOC Prediction', 'SOC Estimate');
+        title('2RC Model SOC Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, V1_pred_2RC, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, V1_estimate_2RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('V1 [V]');
+        legend('V1 Prediction', 'V1 Estimate');
+        title('2RC Model V1 Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, V2_pred_2RC, '--', 'LineWidth', 1.5);
+        hold on;
+        plot(t, V2_estimate_2RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('V2 [V]');
+        legend('V2 Prediction', 'V2 Estimate');
+        title('2RC Model V2 Prediction and Estimate for Trip 1');
+        grid on;
+        hold off;
+
+        figure;
+        plot(t, K_SOC_2RC, '-', 'LineWidth', 1.5);
+        hold on;
+        plot(t, K_V1_2RC, '-', 'LineWidth', 1.5);
+        plot(t, K_V2_2RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Kalman Gain');
+        legend('Kalman Gain for SOC', 'Kalman Gain for V1', 'Kalman Gain for V2');
+        title('2RC Model Kalman Gains for Trip 1');
+        grid on;
+
+        figure;
+        plot(t, residual_2RC, '-', 'LineWidth', 1.5);
+        xlabel('Time [s]');
+        ylabel('Residual');
+        title('2RC Model Residual for Trip 1');
+        grid on;
+    end
+
     %% Update time offset
     time_offset = t(end);
 

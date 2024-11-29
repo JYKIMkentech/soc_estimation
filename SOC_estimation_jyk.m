@@ -1,7 +1,7 @@
 clc; clear; close all;
 
 %% 시드 설정
-%rng(13);
+rng(13);
 
 %% Font size settings
 axisFontSize = 14;
@@ -32,7 +32,7 @@ load('udds_data.mat'); % 구조체 배열 'udds_data'로 V, I, t, Time_duration,
 Q_batt = 2.7742; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-current_noise_percent = 0.05;
+epsilon_percent_span = 0.4;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values); % unique_soc : 1029x1
@@ -51,15 +51,15 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-3 0;
-            0   1e-5]; % [SOC ; V1] % State covariance
-P2_init = [1e-3 0        0;
+P1_init = [1e-5 0;
+            0   1e-3]; % [SOC ; V1] % State covariance
+P2_init = [1e-10 0        0;
             0   1e-6    0;
             0   0       1e-6]; % [SOC; V1; V2] % State covariance
 
-P3_init(1,1) = 1e-7;    % SOC의 초기 공분산
+P3_init(1,1) = 1e-10;    % SOC의 초기 공분산
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-7; % 각 V_i의 초기 공분산
+    P3_init(i,i) = 1e-10; % 각 V_i의 초기 공분산
 end
 
 
@@ -68,20 +68,20 @@ end
 Q1 = [1e-5 0;
       0  1e-5];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-3 0        0;
-             0     1e-3    0;
-             0      0     1e-7]; % [SOC; V1; V2] % Process covariance
+Q2 = [1e-8 0        0;
+             0     1e-5    0;
+             0      0     1e-5]; % [SOC; V1; V2] % Process covariance
 
-Q3(1,1) = 1e-10; % SOC의 프로세스 노이즈
+Q3(1,1) = 1e-9; % SOC의 프로세스 노이즈
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-10; % 각 V_i의 프로세스 노이즈
+    Q3(i,i) = 1e-9; % 각 V_i의 프로세스 노이즈
 end
 
 % R , Measurement covariance
 
-R1 = 25e-6;
-R2 = 25e-6;
-R3 = 25e-6;
+R1 = 25e-3;
+R2 = 25e-3;
+R3 = 25e-3;
 
 %% 3. ECM parameter 추출
 
@@ -113,7 +113,7 @@ SOC_est_2RC_all = cell(num_trips, 1);
 SOC_est_DRT_all = cell(num_trips, 1);
 
 for s = 1 : num_trips-16 % 각 Trip에 대해
-    fprintf('Processing Trip %d/%d...\n', s, num_trips-14);
+    fprintf('Processing Trip %d/%d...\n', s, num_trips-16);
 
     I = udds_data(s).I;
     V = udds_data(s).V;
@@ -122,7 +122,7 @@ for s = 1 : num_trips-16 % 각 Trip에 대해
     dt(1) = dt(2);
     Time_duration = udds_data(s).Time_duration; % 모든 trip이 시작이 이어져있음 
 
-    [noisy_I] = Markov(I,current_noise_percent); % 전류에 Markov noise 추가 
+    [noisy_I] = Markov(I,epsilon_percent_span); % 전류에 Markov noise 추가 
     noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % 전압에 Gaussian noise 추가 
 
     True_SOC = SOC_begin_true + cumtrapz(t,I)/(3600 * Q_batt); % True SOC (noisy 존재 x)
@@ -383,44 +383,50 @@ legend('Coulomb Counting SOC', 'True SOC', 'Estimated SOC (1-RC)', 'Estimated SO
 title('SOC Estimation');
 grid on;
 
-
+figure;
+plot(t,I-noisy_I)
 
 
 
 
 %% Function for adding Markov noise
-function [noisy_I] = Markov(I, noise_percent)
+function [noisy_I] = Markov(I, epsilon_percent_span)
 
-    noise_number = 50;
-    initial_state = randsample(1:noise_number, 1); % 현재 state random
-    mean_noise = mean(I) * noise_percent;
-    min_noise = min(I) * noise_percent; % min(I) = -4.8 A --> -0.0048 A
-    max_noise = max(I) * noise_percent; % max(I) = 3.1 A --> 0.0031 A
-    span = max_noise - min_noise; % span = 0.0079 A
-    sigma = span / noise_number; % sigma = 1.6e-4
-    noise_vector = linspace(mean_noise - span/2, mean_noise + span/2, noise_number); % (-0.0434 , .... , 0.0353 ) 범위 가짐
-    P = zeros(noise_number);
+    % Define noise parameters
+    sigma_percent = 0.001;      % Standard deviation in percentage (adjust as needed)
 
-    for i = 1:noise_number
-        probabilities = normpdf(noise_vector, noise_vector(i), sigma); % P(i,i)가 젤 높음
-        P(i, :) = probabilities / sum(probabilities); % 합쳐서 1 
+    N = 51; % Number of states
+    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -noise_percent to +noise_percent
+    sigma = sigma_percent; % Standard deviation in percentage
+
+    % Initialize transition probability matrix P
+    P = zeros(N);
+    for i = 1:N
+        probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
+        P(i, :) = probabilities / sum(probabilities); % Normalize to sum to 1
     end
 
-    noisy_I = zeros(size(I));
-    states = zeros(size(I));
+    % Initialize state tracking
+    initial_state = 3; %randsample(1:N, 1); % Randomly select initial state
     current_state = initial_state;
-    
-    for m = 1:length(I)
-        noisy_I(m) = I(m) + noise_vector(current_state); % random state에 해당하는 noise 전류 더하기
-        states(m) = current_state;
-        current_state = randsample(1:noise_number, 1 , true, P(current_state, :)); % 복원 추출
+
+    % Initialize output variables
+    noisy_I = zeros(size(I));
+    states = zeros(size(I)); % Vector to store states
+    epsilon = zeros(size(I));
+
+    % Generate noisy current and track states
+    for k = 1:length(I)
+        epsilon(k) = epsilon_vector(current_state);
+        noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); % Apply the epsilon percentage
+
+        states(k) = current_state; % Store the current state
+
+        % Transition to the next state based on probabilities
+        current_state = randsample(1:N, 1, true, P(current_state, :));
     end
 
 end
-
-
-
-
 
 
 

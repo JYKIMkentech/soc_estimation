@@ -1,5 +1,8 @@
 clc; clear; close all;
 
+
+rng(1)
+
 % Load the dataset
 load('udds_data.mat');
 
@@ -35,7 +38,7 @@ epsilon = zeros(size(I));
 % Generate noisy current and track states
 for k = 1:length(I)
     epsilon(k) = epsilon_vector(current_state);
-    noisy_I(k) = I(k) * (1 + epsilon(k)); % Apply the epsilon percentage
+    noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); % Apply the epsilon percentage
     
     states(k) = current_state; % Store the current state
     

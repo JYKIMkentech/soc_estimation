@@ -23,7 +23,7 @@ ocv_values = soc_ocv(:, 2);  % OCV 값
 
 n = 201;
 dur = 1370; % [sec]
-SOC_begin = 0.983 ; %0.9907; % 초기 SOC 값
+SOC_begin = 0.9907 ; %0.9907; % 초기 SOC 값
 Q_batt = 2.7742; % [Ah]
 
 %% 3. 각 trip에 대한 DRT 추정 (Quadprog 사용)
