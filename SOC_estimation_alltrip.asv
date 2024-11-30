@@ -53,8 +53,8 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-10 0;
-            0   1e-10]; % [SOC ; V1] % State covariance
+P1_init = [1e-6 0;
+            0   1e-9]; % [SOC ; V1] % State covariance
 P2_init = [1e-7 0        0;
             0   1e-9   0;
             0   0       1e-69]; % [SOC; V1; V2] % State covariance
@@ -67,7 +67,7 @@ end
 
 % Q
 
-Q1 = [1e-6 0;
+Q1 = [1e-7 0;
       0  1e-9];  % [SOC ; V1] % Process covariance
 
 Q2 = [1e-7 0        0;
@@ -82,8 +82,8 @@ end
 
 % R , Measurement covariance
 
-R1 = 25e-6;
-R2 = 25e-6;
+R1 = 25e-3;
+R2 = 25e-3;
 R3 = 25e-3;
 
 %% 3. Extract ECM parameters
@@ -159,7 +159,7 @@ SOC_error_DRT_total = [];
 
 time_offset = 0; % To adjust time for concatenation
 
-for s = 1 : num_trips-1 % For each trip
+for s = 1 : num_trips-16 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips-1);
 
     I = udds_data(s).I;

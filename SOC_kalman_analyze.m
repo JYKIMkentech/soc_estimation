@@ -1,89 +1,89 @@
 clc; clear; close all;
 
-%% Seed Setting
-%rng(13); 
+%% 시드 설정
+rng(13);
 
-%% Font Size Settings
+%% Font size settings
 axisFontSize = 14;
 titleFontSize = 16;
 legendFontSize = 12;
 labelFontSize = 14;
 
-%% 1. Data Load
+%% 1. Data load
 
-% ECM Parameters (from HPPC test)
-load('optimized_params_struct_final_2RC.mat'); % Fields: R0, R1, C1, R2, C2, SOC, avgI, m, Crate
+% ECM 파라미터 (HPPC 테스트로부터)
+load('optimized_params_struct_final_2RC.mat'); % 필드: R0, R1, C1, R2, C2, SOC, avgI, m, Crate
 
-% DRT Parameters (gamma and tau values)
+% DRT 파라미터 (gamma 및 tau 값)
 load('theta_discrete.mat');
-load('gamma_est_all.mat', 'gamma_est_all');  % Modified part: Removed SOC_mid_all
-load('R0_est_all.mat');
+load('gamma_est_all.mat', 'gamma_est_all');  % 수정된 부분: SOC_mid_all 제거
+load('R0_est_all.mat')
 
-tau_discrete = exp(theta_discrete); % tau values
+tau_discrete = exp(theta_discrete); % tau 값
 
-% SOC-OCV Lookup Table (from C/20 test)
+% SOC-OCV 룩업 테이블 (C/20 테스트로부터)
 load('soc_ocv.mat', 'soc_ocv'); % [SOC, OCV]
-soc_values = soc_ocv(:, 1);     % SOC values % 1083 x 1
-ocv_values = soc_ocv(:, 2);     % Corresponding OCV values [V] % 1083 x 1
+soc_values = soc_ocv(:, 1);     % SOC 값 % 1083 x 1
+ocv_values = soc_ocv(:, 2);     % 해당하는 OCV 값 [V] % 1083 x 1
 
-% Driving Data (17 trips)
-load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
+% 주행 데이터 (17개의 트립)
+load('udds_data.mat'); % 구조체 배열 'udds_data'로 V, I, t, Time_duration, SOC 필드 포함
 
 Q_batt = 2.7742; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-current_noise_percent = 0.02;
+epsilon_percent_span = 0.4;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values); % unique_soc : 1029x1
 unique_soc = soc_values(b);           % unique_ocv : 1029x1  
 
-%% Compute the Derivative of OCV with Respect to SOC
+%% Compute the derivative of OCV with respect to SOC
 dOCV_dSOC_values = gradient(unique_ocv) ./ gradient(unique_soc);
 
 windowSize = 10; 
 dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
-%% 2. Kalman Filter Settings
+%% 2. Kalman filter setting
 
-% 1 : 1-RC, 2: 2-RC, 3 : DRT
+% 1 : 1-RC , 2: 2-RC , 3 : DRT
 
 num_RC = length(tau_discrete);
 
-% Initialize P
-P1_init = [1e-5 0;
-           0   1e-5]; % [SOC ; V1] State Covariance
+% P
+P1_init = [1e-5 0 ; 
+            0   1e-3]; % [SOC ; V1] % State covariance
+P2_init = [1e-10 0        0;
+            0   1e-10    0;
+            0   0       1e-10]; % [SOC; V1; V2] % State covariance
 
-P2_init = [1e-6 0       0;
-           0   1e-6    0;
-           0   0       1e-6]; % [SOC; V1; V2] State Covariance
-
-P3_init = zeros(1 + num_RC); % DRT Model State Covariance
-P3_init(1,1) = 1e-7;    % Initial covariance for SOC
+P3_init(1,1) = 1e-9;    % SOC의 초기 공분산
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-7; % Initial covariance for each V_i
+    P3_init(i,i) = 1e-9; % 각 V_i의 초기 공분산
 end
 
-% Q Process Noise Covariance
-Q1 = [1e-5 0;
-      0    1e-5];  % [SOC ; V1] Process Noise
 
-Q2 = [1e-7  0        0;
-      0     1e-7    0;
-      0      0     1e-7]; % [SOC; V1; V2] Process Noise
+% Q
 
-Q3 = zeros(1 + num_RC);
-Q3(1,1) = 1e-10; % Process noise for SOC
+Q1 = [4e-5 0;
+      0  1e-3];  % [SOC ; V1] % Process covariance
+
+Q2 = [1e-7    0        0;
+             0     1e-5    0;
+             0      0     1e-5]; % [SOC; V1; V2] % Process covariance
+
+Q3(1,1) = 1e-3; % SOC의 프로세스 노이즈
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-10; % Process noise for each V_i
+    Q3(i,i) = 1e-5; % 각 V_i의 프로세스 노이즈
 end
 
-% R Measurement Noise Covariance
-R1 = 5.25e-6;
-R2 = 5.25e-6;
-R3 = 5.25e-6;
+% R , Measurement covariance
 
-%% 3. Extract ECM Parameters
+R1 = 1e-4;
+R2 = 1e-4;
+R3 = 1e-4;
+
+%% 3. ECM parameter 추출
 
 num_params = length(optimized_params_struct_final_2RC);
 SOC_params = zeros(num_params, 1);
@@ -102,48 +102,41 @@ for i = 1:num_params
     C2_params(i) = optimized_params_struct_final_2RC(i).C2;
 end
 
-%% 4. Apply Kalman Filter to All Trips
+%% 4. 모든 trips에 칼만 필터 적용
 
 num_trips = length(udds_data);
 
-% Initialize cell arrays to store results
 True_SOC_all = cell(num_trips, 1);   
 CC_SOC_all = cell(num_trips, 1);
 SOC_est_1RC_all = cell(num_trips, 1);
 SOC_est_2RC_all = cell(num_trips, 1);
 SOC_est_DRT_all = cell(num_trips, 1);
 
-% Additional cell arrays to store predictions, estimates, and Kalman gains
-x_pred_1RC_all = cell(num_trips, 1);
-x_estimate_1RC_all = cell(num_trips, 1);
-K_1RC_all = cell(num_trips, 1);
+% New variables to store residuals and Kalman gains
+Residuals_1RC_all = cell(num_trips, 1);
+KalmanGain_1RC_all = cell(num_trips, 1);
 
-x_pred_2RC_all = cell(num_trips, 1);
-x_estimate_2RC_all = cell(num_trips, 1);
-K_2RC_all = cell(num_trips, 1);
+Residuals_2RC_all = cell(num_trips, 1);
+KalmanGain_2RC_all = cell(num_trips, 1);
 
-x_pred_DRT_all = cell(num_trips, 1);
-x_estimate_DRT_all = cell(num_trips, 1);
-K_DRT_all = cell(num_trips, 1);
+Residuals_DRT_all = cell(num_trips, 1);
+KalmanGain_DRT_all = cell(num_trips, 1);
 
-epsilon_percent_span = 0.1; % ±5% epsilon percentages
-sigma_percent = 0.01;        % 1% standard deviation
-
-for s = 1 : num_trips-16 % For each trip
+for s = 1 : num_trips-16 % 각 Trip에 대해 (예: 1에서 num_trips-16까지)
     fprintf('Processing Trip %d/%d...\n', s, num_trips-16);
 
     I = udds_data(s).I;
     V = udds_data(s).V;
-    t = udds_data(s).t; % All trips start at 0 seconds
+    t = udds_data(s).t; % 모든 trip의 시작이 0초
     dt = [t(1); diff(t)];
     dt(1) = dt(2);
-    Time_duration = udds_data(s).Time_duration; % All trips are consecutive
+    Time_duration = udds_data(s).Time_duration; % 모든 trip이 시작이 이어져있음 
 
-    [noisy_I] = Markov(I, epsilon_percent_span, sigma_percent); % Updated function call
-    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % Add Gaussian noise to voltage
+    [noisy_I] = Markov(I,epsilon_percent_span); % 전류에 Markov noise 추가 
+    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % 전압에 Gaussian noise 추가 
 
-    True_SOC = SOC_begin_true + cumtrapz(t,I)/(3600 * Q_batt); % True SOC (no noise)
-    CC_SOC = SOC_begin_cc + cumtrapz(t,noisy_I)/(3600 * Q_batt); % CC SOC (with noise)
+    True_SOC = SOC_begin_true + cumtrapz(t,I)/(3600 * Q_batt); % True SOC (noisy 존재 x)
+    CC_SOC = SOC_begin_cc + cumtrapz(t,noisy_I)/(3600 * Q_batt); % CC SOC (noisy 존재)
 
     True_SOC_all{s} = True_SOC;
     CC_SOC_all{s} = CC_SOC;
@@ -151,7 +144,7 @@ for s = 1 : num_trips-16 % For each trip
     SOC_begin_true = True_SOC(end);
     SOC_begin_cc = CC_SOC(end);
 
-    %% DRT Model
+    %% DRT
 
     gamma = gamma_est_all(s,:); % 1x201
     delta_theta = theta_discrete(2) - theta_discrete(1); % 0.0476
@@ -159,21 +152,21 @@ for s = 1 : num_trips-16 % For each trip
     C_i = tau_discrete' ./ R_i; % 1x201
 
     SOC_estimate = CC_SOC(1);
-    V_estimate = zeros(num_RC,1); % Initial values for V_i
+    V_estimate = zeros(num_RC,1); % V_i들의 초기값
     P_estimate = P3_init;
     SOC_est_DRT = zeros(length(t),1);
-    V_DRT_est = zeros(length(t), num_RC); % Store each V_i
+    V_DRT_est = zeros(length(t), num_RC); % 각 V_i 저장
 
-    % Initialize arrays to store predictions, estimates, and Kalman gains
-    x_pred_DRT = zeros(length(t), 1 + num_RC);      % [SOC_pred, V_pred_RC]
-    x_estimate_DRT = zeros(length(t), 1 + num_RC);  % [SOC_estimate, V_estimate_RC]
-    K_DRT = zeros(1 + num_RC, length(t));           % Kalman Gain
+    % Initialize arrays to store residuals and Kalman gains
+    residuals_DRT = zeros(length(t),1);
+    kalman_gain_DRT = zeros(length(t),1); % We can store the norm or specific elements as needed
 
-    for k = 1:length(t) % Prediction and correction for each time step
+    for k = 1:length(t) % k-1 --> k번째 시간 Prediction and correction
 
         R0 = interp1(SOC_params, R0_params, SOC_estimate, 'linear', 'extrap');
 
-        % Prediction Step
+        % predict step
+
         if k == 1
             % Initial prediction of V_i
             V_pred = zeros(num_RC,1);
@@ -184,198 +177,196 @@ for s = 1 : num_trips-16 % For each trip
             % Predict V_i
             V_pred = zeros(num_RC,1);
             for i = 1:num_RC
-                V_pred(i) = V_estimate(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + ...
-                           noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
+                V_pred(i) = V_estimate(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
             end
         end
 
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
-        
+
         x_pred = [SOC_pred; V_pred];
 
-        % Store the predicted state
-        x_pred_DRT(k, :) = x_pred';
 
         % Predict the error covariance
-        A = zeros(1 + num_RC);
+        A = eye(1 + num_RC);
         A(1,1) = 1; % SOC
         for i = 1:num_RC
             A(i+1,i+1) = exp(-dt(k) / (R_i(i) * C_i(i)));
         end
         P_pred = A * P_estimate * A' + Q3;
 
-        % Predict OCV and compute dOCV/dSOC
+        % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
+
+        % dOCV_dSOC 계산 (미리 계산된 값 사용)
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
-        % Measurement Matrix H
+        % Measurement matrix H
         H = zeros(1, 1 + num_RC);
         H(1) = dOCV_dSOC;
         H(2:end) = ones(1, num_RC);
 
-        % Compute the predicted total voltage
+        % Compute the predicted voltage
         V_pred_total = OCV_pred + sum(V_pred) + R0 * noisy_I(k);
 
-        % Calculate Kalman Gain
+        % Compute the Kalman gain
         S = H * P_pred * H' + R3; % Measurement noise covariance
         K = P_pred * H' / S;
 
-        % Store Kalman Gain
-        K_DRT(:, k) = K;
+        % Store the Kalman gain (you can choose which element to store)
+        kalman_gain_DRT(k) = K(1); % Storing the Kalman gain for SOC
 
-        % Update Step
+        % Compute the residual
         z = noisy_V(k); % Measurement
-        x_estimate = x_pred + K * (z - V_pred_total);
+        residual = z - V_pred_total;
+        residuals_DRT(k) = residual;
 
-        % Store the estimated state
-        x_estimate_DRT(k, :) = x_estimate';
+        % Update the estimate
+        x_estimate = x_pred + K * residual;
 
         % Update the error covariance
         P_estimate = (eye(1 + num_RC) - K * H) * P_pred;
 
-        % Store SOC and V_i
+        % Store the estimates
         SOC_est_DRT(k) = x_estimate(1);
         V_estimate = x_estimate(2:end);
 
-        V_DRT_est(k, :) = V_estimate'; % Store V1, V2, ..., V201
+        V_DRT_est(k, :) = V_estimate'; % V1,V2,V3,...V201까지 저장
 
-        % Update estimate for next iteration
+        % Update the estimates for next iteration
         SOC_estimate = x_estimate(1);
     end
 
     SOC_est_DRT_all{s} = SOC_est_DRT; 
-    x_pred_DRT_all{s} = x_pred_DRT;
-    x_estimate_DRT_all{s} = x_estimate_DRT;
-    K_DRT_all{s} = K_DRT;
 
-    %% 1-RC Model
+
+    % Store residuals and Kalman gains
+    Residuals_DRT_all{s} = residuals_DRT;
+    KalmanGain_DRT_all{s} = kalman_gain_DRT;
+
+
+    %% 1-RC
 
     SOC_est_1RC =  zeros(length(t), 1);
     V1_est_1RC = zeros(length(t), 1);
 
-    % Initialize arrays to store predictions, estimates, and Kalman gains
-    x_pred_1RC = zeros(length(t), 2);        % [SOC_pred, V1_pred]
-    x_estimate_1RC = zeros(length(t), 2);    % [SOC_estimate, V1_estimate]
-    K_1RC = zeros(2, length(t));             % Kalman Gain
-
     SOC_estimate = CC_SOC(1);
     P_estimate = P1_init;
 
+    % Initialize arrays to store residuals and Kalman gains
+    residuals_1RC = zeros(length(t),1);
+    kalman_gain_1RC = zeros(length(t),1);
+
     for k = 1:length(t)
 
-        % Calculate R0, R1, C1 from SOC_estimate
+        % Compute R0, R1, C1 at SOC_estimate
         R0 = interp1(SOC_params, R0_params, SOC_estimate, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate, 'linear', 'extrap');
 
-        % Prediction Step
+        % Predict step
+
         if k == 1
             % Initial prediction of V1
             V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
         else
             % Predict V1
-            V1_pred = V_estimate(1) * exp(-dt(k) / (R1 * C1)) + ...
-                      noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+            V1_pred = V1_estimate * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
         end
 
         % Predict SOC
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
-        % Predicted state vector
+        % Form the predicted state vector
         x_pred = [SOC_pred; V1_pred];
-
-        % Store the predicted state
-        x_pred_1RC(k, :) = x_pred';
 
         % Predict the error covariance
         A = [1 0;
              0 exp(-dt(k) / (R1 * C1))];
         P_pred = A * P_estimate * A' + Q1;
 
-        % Predict OCV and compute dOCV/dSOC
+        % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
-        % Measurement Matrix H
+        % Measurement matrix H
         H = [dOCV_dSOC, 1];
 
-        % Compute the predicted total voltage
+        % Compute the predicted voltage
         V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
 
-        % Calculate Kalman Gain
+        % Compute the Kalman gain
         S = H * P_pred * H' + R1; % Measurement noise covariance
         K = P_pred * H' / S;
 
-        % Store Kalman Gain
-        K_1RC(:, k) = K;
+        % Store the Kalman gain
+        kalman_gain_1RC(k) = K(1); % Storing the Kalman gain for SOC
 
-        % Update Step
+        % Compute the residual
         z = noisy_V(k); % Measurement
-        x_estimate = x_pred + K * (z - V_pred_total);
+        residual = z - V_pred_total;
+        residuals_1RC(k) = residual;
 
-        % Store the estimated state
-        x_estimate_1RC(k, :) = x_estimate';
+        % Update the estimate
+        x_estimate = x_pred + K * residual;
 
         % Update the error covariance
         P_estimate = (eye(2) - K * H) * P_pred;
 
-        % Store SOC and V1
+        % Store the estimates
         SOC_est_1RC(k) = x_estimate(1);
         V1_est_1RC(k) = x_estimate(2);
 
-        % Update estimate for next iteration
+        % Update the estimates for next iteration
         SOC_estimate = x_estimate(1);
+        V1_estimate = x_estimate(2);
     end
 
     SOC_est_1RC_all{s} = SOC_est_1RC;
-    x_pred_1RC_all{s} = x_pred_1RC;
-    x_estimate_1RC_all{s} = x_estimate_1RC;
-    K_1RC_all{s} = K_1RC;
 
-    %% 2-RC Model
+    % Store residuals and Kalman gains
+    Residuals_1RC_all{s} = residuals_1RC;
+    KalmanGain_1RC_all{s} = kalman_gain_1RC;
+
+
+    %% 2-RC
 
     SOC_est_2RC = zeros(length(t),1);
     V1_est_2RC = zeros(length(t),1);
     V2_est_2RC = zeros(length(t),1);
 
-    % Initialize arrays to store predictions, estimates, and Kalman gains
-    x_pred_2RC = zeros(length(t), 3);        % [SOC_pred, V1_pred, V2_pred]
-    x_estimate_2RC = zeros(length(t), 3);    % [SOC_estimate, V1_estimate, V2_estimate]
-    K_2RC = zeros(3, length(t));             % Kalman Gain
-
     SOC_estimate = CC_SOC(1);
     P_estimate = P2_init;
 
+    % Initialize arrays to store residuals and Kalman gains
+    residuals_2RC = zeros(length(t),1);
+    kalman_gain_2RC = zeros(length(t),1);
+
     for k = 1:length(t)
 
-        % Calculate R0, R1, C1, R2, C2 from SOC_estimate
+        % Compute R0, R1, C1, R2, C2 at SOC_estimate
         R0 = interp1(SOC_params, R0_params, SOC_estimate, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate, 'linear', 'extrap');
         R2 = interp1(SOC_params, R2_params, SOC_estimate, 'linear', 'extrap');
         C2 = interp1(SOC_params, C2_params, SOC_estimate, 'linear', 'extrap');
 
-        % Prediction Step
+        % Predict step
+
         if k == 1
             % Initial prediction of V1 and V2
             V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
             V2_pred = noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
         else
             % Predict V1 and V2
-            V1_pred = V_estimate(1) * exp(-dt(k) / (R1 * C1)) + ...
-                      noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
-            V2_pred = V_estimate(2) * exp(-dt(k) / (R2 * C2)) + ...
-                      noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
+            V1_pred = V1_estimate * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+            V2_pred = V2_estimate * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
         end
 
         % Predict SOC
         SOC_pred = SOC_estimate + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
-        % Predicted state vector
+        % Form the predicted state vector
         x_pred = [SOC_pred; V1_pred; V2_pred];
-
-        % Store the predicted state
-        x_pred_2RC(k, :) = x_pred';
 
         % Predict the error covariance
         A = [1 0 0;
@@ -383,130 +374,55 @@ for s = 1 : num_trips-16 % For each trip
              0 0 exp(-dt(k) / (R2 * C2))];
         P_pred = A * P_estimate * A' + Q2;
 
-        % Predict OCV and compute dOCV/dSOC
+        % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
-        dOCV_dSOC = interp1(unique_soc,dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
+        dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred, 'linear', 'extrap');
 
-        % Measurement Matrix H
+        % Measurement matrix H
         H = [dOCV_dSOC, 1, 1];
 
-        % Compute the predicted total voltage
+        % Compute the predicted voltage
         V_pred_total = OCV_pred + V1_pred + V2_pred + R0 * noisy_I(k);
 
-        % Calculate Kalman Gain
+        % Compute the Kalman gain
         S = H * P_pred * H' + R2; % Measurement noise covariance
         K = P_pred * H' / S;
 
-        % Store Kalman Gain
-        K_2RC(:, k) = K;
+        % Store the Kalman gain
+        kalman_gain_2RC(k) = K(1); % Storing the Kalman gain for SOC
 
-        % Update Step
+        % Compute the residual
         z = noisy_V(k); % Measurement
-        x_estimate = x_pred + K * (z - V_pred_total);
+        residual = z - V_pred_total;
+        residuals_2RC(k) = residual;
 
-        % Store the estimated state
-        x_estimate_2RC(k, :) = x_estimate';
+        % Update the estimate
+        x_estimate = x_pred + K * residual;
 
         % Update the error covariance
         P_estimate = (eye(3) - K * H) * P_pred;
 
-        % Store SOC, V1, V2
+        % Store the estimates
         SOC_est_2RC(k) = x_estimate(1);
         V1_est_2RC(k) = x_estimate(2);
         V2_est_2RC(k) = x_estimate(3);
 
-        % Update estimate for next iteration
+        % Update the estimates for next iteration
         SOC_estimate = x_estimate(1);
+        V1_estimate = x_estimate(2);
+        V2_estimate = x_estimate(3);
     end
 
     SOC_est_2RC_all{s} = SOC_est_2RC;  
-    x_pred_2RC_all{s} = x_pred_2RC;
-    x_estimate_2RC_all{s} = x_estimate_2RC;
-    K_2RC_all{s} = K_2RC;
+
+    % Store residuals and Kalman gains
+    Residuals_2RC_all{s} = residuals_2RC;
+    KalmanGain_2RC_all{s} = kalman_gain_2RC;
 
 end
 
-%% Plotting Graphs for Example Trip (First Trip)
-s = 1; % Select the first trip
 
-% Graph for 1-RC Model
-figure('Name', '1-RC Model', 'NumberTitle', 'off');
-
-% SOC Related Subplot
-subplot(2,1,1);
-plot(udds_data(s).t, True_SOC_all{s}, 'k--', 'LineWidth', 0.5);         % True SOC
-hold on;
-plot(udds_data(s).t, x_pred_1RC_all{s}(:, 1), 'b-', 'LineWidth', 0.5);  % Predicted SOC
-plot(udds_data(s).t, x_estimate_1RC_all{s}(:, 1), 'r-', 'LineWidth', 0.5); % Estimated SOC
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('SOC', 'FontSize', labelFontSize);
-legend('True SOC', 'Predicted SOC', 'Estimated SOC', 'FontSize', legendFontSize);
-title('SOC Estimation (1-RC Model)', 'FontSize', titleFontSize);
-grid on;
-
-% Kalman Gain Subplot
-subplot(2,1,2);
-plot(udds_data(s).t, K_1RC_all{s}(1, :), 'b-', 'LineWidth', 0.5);  % Kalman Gain for SOC
-hold on;
-plot(udds_data(s).t, K_1RC_all{s}(2, :), 'r-', 'LineWidth', 0.5);  % Kalman Gain for V1
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('Kalman Gain', 'FontSize', labelFontSize);
-legend('Kalman Gain for SOC', 'Kalman Gain for V1', 'FontSize', legendFontSize);
-title('Kalman Gain (1-RC Model)', 'FontSize', titleFontSize);
-grid on;
-
-% Graph for 2-RC Model
-figure('Name', '2-RC Model', 'NumberTitle', 'off');
-
-% SOC Related Subplot
-subplot(2,1,1);
-plot(udds_data(s).t, True_SOC_all{s}, 'k--', 'LineWidth', 0.5);         % True SOC
-hold on;
-plot(udds_data(s).t, x_pred_2RC_all{s}(:, 1), 'b-', 'LineWidth',0.5);  % Predicted SOC
-plot(udds_data(s).t, x_estimate_2RC_all{s}(:, 1), 'r-', 'LineWidth', 0.5); % Estimated SOC
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('SOC', 'FontSize', labelFontSize);
-legend('True SOC', 'Predicted SOC', 'Estimated SOC', 'FontSize', legendFontSize);
-title('SOC Estimation (2-RC Model)', 'FontSize', titleFontSize);
-grid on;
-
-% Kalman Gain Subplot
-subplot(2,1,2);
-plot(udds_data(s).t, K_2RC_all{s}(1, :), 'b-', 'LineWidth', 0.5);  % Kalman Gain for SOC
-hold on;
-plot(udds_data(s).t, K_2RC_all{s}(2, :), 'r-', 'LineWidth', 0.5);  % Kalman Gain for V1
-plot(udds_data(s).t, K_2RC_all{s}(3, :), 'g-', 'LineWidth', 0.5);  % Kalman Gain for V2
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('Kalman Gain', 'FontSize', labelFontSize);
-legend('Kalman Gain for SOC', 'Kalman Gain for V1', 'Kalman Gain for V2', 'FontSize', legendFontSize);
-title('Kalman Gain (2-RC Model)', 'FontSize', titleFontSize);
-grid on;
-
-% Graph for DRT Model
-figure('Name', 'DRT Model', 'NumberTitle', 'off');
-
-% SOC Related Subplot
-subplot(2,1,1);
-plot(udds_data(s).t, True_SOC_all{s}, 'k--', 'LineWidth', 1.5);         % True SOC
-hold on;
-plot(udds_data(s).t, x_pred_DRT_all{s}(:, 1), 'b-', 'LineWidth', 1.5);  % Predicted SOC
-plot(udds_data(s).t, x_estimate_DRT_all{s}(:, 1), 'r-', 'LineWidth', 1.5); % Estimated SOC
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('SOC', 'FontSize', labelFontSize);
-legend('True SOC', 'Predicted SOC', 'Estimated SOC', 'FontSize', legendFontSize);
-title('SOC Estimation (DRT Model)', 'FontSize', titleFontSize);
-grid on;
-
-% Kalman Gain Subplot
-subplot(2,1,2);
-plot(udds_data(s).t, K_DRT_all{s}(1, :), 'b-', 'LineWidth', 1.5);  % Kalman Gain for SOC
-xlabel('Time [s]', 'FontSize', labelFontSize);
-ylabel('Kalman Gain', 'FontSize', labelFontSize);
-legend('Kalman Gain for SOC', 'FontSize', legendFontSize);
-title('Kalman Gain (DRT Model)', 'FontSize', titleFontSize);
-grid on;
-
-%% Plot Example for the First Trip
+%% Plot example for the first trip
 figure;
 plot(udds_data(1).t, CC_SOC_all{1}, 'b', 'LineWidth', 1.5);
 hold on;
@@ -517,37 +433,120 @@ plot(udds_data(1).t, SOC_est_DRT_all{1}, 'm-', 'LineWidth', 1.5);
 
 xlabel('Time [s]');
 ylabel('SOC');
-legend('Coulomb Counting SOC', 'True SOC', 'Estimated SOC (1-RC)', 'Estimated SOC (2-RC)', 'Estimated SOC (DRT)');
-title('SOC Estimation');
+legend('Coulomb Counting SOC', 'True SOC', 'Estimated SOC (1-RC)', 'Estimated SOC (2-RC)', 'Estimated SOC (DRT)', 'FontSize', legendFontSize);
+title('SOC Estimation', 'FontSize', titleFontSize);
 grid on;
+set(gca, 'FontSize', axisFontSize);
 
+figure;
+plot(t, I - noisy_I, 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('Current Noise [A]');
+title('Current Noise (I - Noisy I)', 'FontSize', titleFontSize);
+grid on;
+set(gca, 'FontSize', axisFontSize);
 
-%% Function to Add Markov Noise to the Current
-function [noisy_I] = Markov(I, epsilon_percent_span, sigma_percent)
+%% Plot residuals and Kalman gains for the first trip using subplots
+trip_to_plot = 1; % You can change this to plot other trips
 
-    N = 51; % Number of states in the Markov chain
-    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -5% to +5%
-    sigma = sigma_percent; % Standard deviation in percentage (e.g., 0.01 for 1%)
+% Time vector
+time_vector = udds_data(trip_to_plot).t;
 
-    % Initialize the transition probability matrix
+% Create a figure with three subplots for Residuals and Kalman Gains
+figure('Name', 'Residuals and Kalman Gains for First Trip', 'NumberTitle', 'off');
+
+% 1. DRT Model
+subplot(3,1,1);
+yyaxis left
+plot(time_vector, Residuals_DRT_all{trip_to_plot}, 'g', 'LineWidth', 1.5);
+ylabel('Residual [V]', 'FontSize', labelFontSize);
+yyaxis right
+plot(time_vector, KalmanGain_DRT_all{trip_to_plot}, 'm-', 'LineWidth', 1.5);
+ylabel('Kalman Gain for SOC', 'FontSize', labelFontSize);
+title('DRT Model', 'FontSize', titleFontSize);
+legend('Residuals (DRT)', 'Kalman Gain (DRT)', 'FontSize', legendFontSize);
+xlabel('Time [s]', 'FontSize', labelFontSize);
+grid on;
+set(gca, 'FontSize', axisFontSize);
+
+% 2. 1-RC Model
+subplot(3,1,2);
+yyaxis left
+plot(time_vector, Residuals_1RC_all{trip_to_plot}, 'b', 'LineWidth', 1.5);
+ylabel('Residual [V]', 'FontSize', labelFontSize);
+yyaxis right
+plot(time_vector, KalmanGain_1RC_all{trip_to_plot}, 'r', 'LineWidth', 1.5);
+ylabel('Kalman Gain for SOC', 'FontSize', labelFontSize);
+title('1-RC Model', 'FontSize', titleFontSize);
+legend('Residuals (1-RC)', 'Kalman Gain (1-RC)', 'FontSize', legendFontSize);
+xlabel('Time [s]', 'FontSize', labelFontSize);
+grid on;
+set(gca, 'FontSize', axisFontSize);
+
+% 3. 2-RC Model
+subplot(3,1,3);
+yyaxis left
+plot(time_vector, Residuals_2RC_all{trip_to_plot}, 'r', 'LineWidth', 1.5);
+ylabel('Residual [V]', 'FontSize', labelFontSize);
+yyaxis right
+plot(time_vector, KalmanGain_2RC_all{trip_to_plot}, 'k', 'LineWidth', 1.5);
+ylabel('Kalman Gain for SOC', 'FontSize', labelFontSize);
+title('2-RC Model', 'FontSize', titleFontSize);
+legend('Residuals (2-RC)', 'Kalman Gain (2-RC)', 'FontSize', legendFontSize);
+xlabel('Time [s]', 'FontSize', labelFontSize);
+grid on;
+set(gca, 'FontSize', axisFontSize);
+
+% Adjust layout for better visibility
+tightfig;
+
+%% Function for adding Markov noise
+function [noisy_I] = Markov(I, epsilon_percent_span)
+
+    % Define noise parameters
+    sigma_percent = 0.001;      % Standard deviation in percentage (adjust as needed)
+
+    N = 51; % Number of states
+    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -noise_percent to +noise_percent
+    sigma = sigma_percent; % Standard deviation in percentage
+
+    % Initialize transition probability matrix P
     P = zeros(N);
     for i = 1:N
-        % Compute the transition probabilities to all other states
         probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
         P(i, :) = probabilities / sum(probabilities); % Normalize to sum to 1
     end
 
-    % Initialize the Markov chain
-    initial_state = randsample(1:N, 1); % Randomly select initial state
+    % Initialize state tracking
+    initial_state = 3; %randsample(1:N, 1); % Fixed initial state for reproducibility
     current_state = initial_state;
 
-    % Generate the noisy current
+    % Initialize output variables
     noisy_I = zeros(size(I));
-    for k = 1:length(I)
-        epsilon = epsilon_vector(current_state);
-        noisy_I(k) = I(k) * (1 + epsilon); % Apply the epsilon percentage
+    states = zeros(size(I)); % Vector to store states
+    epsilon = zeros(size(I));
 
-        % Transition to the next state
+    % Generate noisy current and track states
+    for k = 1:length(I)
+        epsilon(k) = epsilon_vector(current_state);
+        noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); % Apply the epsilon percentage
+
+        states(k) = current_state; % Store the current state
+
+        % Transition to the next state based on probabilities
         current_state = randsample(1:N, 1, true, P(current_state, :));
     end
+
 end
+
+%% Helper Function to Adjust Figure Layout
+function tightfig()
+    % TIGHTFIG Adjusts figure margins to remove excess white space
+    % Source: https://www.mathworks.com/matlabcentral/fileexchange/34087-tightfig
+    fig = gcf;
+    fig.PaperPositionMode = 'auto';
+    fig_pos = fig.PaperPosition;
+    fig.PaperSize = [fig_pos(3) fig_pos(4)];
+end
+
+
