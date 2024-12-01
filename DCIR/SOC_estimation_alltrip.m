@@ -32,9 +32,9 @@ ocv_values = soc_ocv(:, 2);     % Corresponding OCV values [V] % 1083 x 1
 % Driving data (17 trips)
 load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
 
-Q_batt = 2.90; % [Ah]
-SOC_begin_true = 0.9907;
-SOC_begin_cc = 0.9907;
+Q_batt = 2.7742 ; % 2.7742; % [Ah]
+SOC_begin_true = 0.983; %0.983;
+SOC_begin_cc = 0.983;
 epsilon_percent_span = 0.1;
 voltage_noise_percent = 0.01;
 
@@ -53,38 +53,38 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-10 0;
-            0   1e-10]; % [SOC ; V1] % State covariance
-P2_init = [1e-7 0        0;
-            0   1e-9   0;
-            0   0       1e-69]; % [SOC; V1; V2] % State covariance
+P1_init = [1e-9 0;
+            0   1e-9]; % [SOC ; V1] % State covariance
+P2_init = [1e-9 0        0;
+            0   1e-10 0;
+            0   0       1e-10]; % [SOC; V1; V2] % State covariance
 
 P3_init = zeros(1 + num_RC); % Initialize P3_init
-P3_init(1,1) = 1e-10;    % Initial covariance for SOC
+P3_init(1,1) = 1e-13;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-10; % Initial covariance for each V_i
+    P3_init(i,i) = 1e-13; % Initial covariance for each V_i
 end
 
 % Q
 
-Q1 = [1e-6 0;
-      0  1e-9];  % [SOC ; V1] % Process covariance
+Q1 = [1e-4 0;
+      0  1e-5];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-7 0        0;
-         0     1e-9    0;
-         0      0     1e-9]; % [SOC; V1; V2] % Process covariance
+Q2 = [5e-4 0        0;
+             0     5e-7    0;
+             0      0     5e-7]; % [SOC; V1; V2] % Process covariance
 
 Q3 = zeros(1 + num_RC); % Initialize Q3
-Q3(1,1) = 5e-10; % Process noise for SOC
+Q3(1,1) = 1e-13; %5e-10; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-9; % Process noise for each V_i
+    Q3(i,i) = 1e-13 ;% 1e-9; % Process noise for each V_i
 end
 
 % R , Measurement covariance
 
-R1 = 25e-6;
-R2 = 25e-6;
-R3 = 25e-3;
+R1 = 25e-4;
+R2 = 25e-4;
+R3 = 25e-4;
 
 %% 3. Extract ECM parameters
 
@@ -131,11 +131,11 @@ SOC_estimate_DRT = SOC_begin_cc;
 V_estimate_DRT = zeros(num_RC,1); % V_i initial values for DRT
 
 SOC_estimate_1RC = SOC_begin_cc;
-V1_est_1RC = 0; % V1 initial value for 1-RC
+V1_estimate_1RC = 0; % V1 initial value for 1-RC
 
 SOC_estimate_2RC = SOC_begin_cc;
-V1_est_2RC = 0; % V1 initial value for 2-RC
-V2_est_2RC = 0; % V2 initial value for 2-RC
+V1_estimate_2RC = 0; % V1 initial value for 2-RC
+V2_estimate_2RC = 0; % V2 initial value for 2-RC
 
 % Initialize error covariances for all models
 P_estimate_DRT = P3_init;
@@ -408,19 +408,19 @@ for s = 1 : num_trips-1 % For each trip
     end
 
     SOC_est_2RC_all{s} = SOC_est_2RC;
-
+    
     %% Calculate SOC errors for this trip
     SOC_error_CC = CC_SOC - True_SOC;
     SOC_error_1RC = SOC_est_1RC - True_SOC;
     SOC_error_2RC = SOC_est_2RC - True_SOC;
     SOC_error_DRT = SOC_est_DRT - True_SOC;
-
+    
     % Store SOC errors
     SOC_error_CC_all{s} = SOC_error_CC;
     SOC_error_1RC_all{s} = SOC_error_1RC;
     SOC_error_2RC_all{s} = SOC_error_2RC;
     SOC_error_DRT_all{s} = SOC_error_DRT;
-
+    
     %% Plot SOC estimates for individual trip
     figure;
     plot(t, True_SOC, '--', 'Color', c_mat(1, :), 'LineWidth', 1.5);
@@ -437,7 +437,7 @@ for s = 1 : num_trips-1 % For each trip
     grid on;
     set(gca, 'FontSize', axisFontSize);
     hold off;
-
+    
     %% Update time offset
     time_offset = t(end);
 
@@ -456,56 +456,6 @@ SOC_error_CC_total = cell2mat(SOC_error_CC_all);
 SOC_error_1RC_total = cell2mat(SOC_error_1RC_all);
 SOC_error_2RC_total = cell2mat(SOC_error_2RC_all);
 SOC_error_DRT_total = cell2mat(SOC_error_DRT_all);
-
-%% Calculate error metrics over all trips
-
-% Coulomb Counting
-ME_CC = mean(SOC_error_CC_total);
-MAE_CC = mean(abs(SOC_error_CC_total));
-RMSE_CC = sqrt(mean(SOC_error_CC_total.^2));
-Max_Error_CC = max(abs(SOC_error_CC_total));
-
-% 1RC Model
-ME_1RC = mean(SOC_error_1RC_total);
-MAE_1RC = mean(abs(SOC_error_1RC_total));
-RMSE_1RC = sqrt(mean(SOC_error_1RC_total.^2));
-Max_Error_1RC = max(abs(SOC_error_1RC_total));
-
-% 2RC Model
-ME_2RC = mean(SOC_error_2RC_total);
-MAE_2RC = mean(abs(SOC_error_2RC_total));
-RMSE_2RC = sqrt(mean(SOC_error_2RC_total.^2));
-Max_Error_2RC = max(abs(SOC_error_2RC_total));
-
-% DRT Model
-ME_DRT = mean(SOC_error_DRT_total);
-MAE_DRT = mean(abs(SOC_error_DRT_total));
-RMSE_DRT = sqrt(mean(SOC_error_DRT_total.^2));
-Max_Error_DRT = max(abs(SOC_error_DRT_total));
-
-%% Combine results into a table
-Error_Metrics = {'Mean Error (ME)'; 'Mean Absolute Error (MAE)'; 'Root Mean Square Error (RMSE)'; 'Maximum Error (Max Error)'};
-Coulomb_Counting = [ME_CC; MAE_CC; RMSE_CC; Max_Error_CC];
-Model_1RC = [ME_1RC; MAE_1RC; RMSE_1RC; Max_Error_1RC];
-Model_2RC = [ME_2RC; MAE_2RC; RMSE_2RC; Max_Error_2RC];
-Model_DRT = [ME_DRT; MAE_DRT; RMSE_DRT; Max_Error_DRT];
-
-Results_Table = table(Error_Metrics, Coulomb_Counting, Model_1RC, Model_2RC, Model_DRT, ...
-    'VariableNames', {'Error_Metric', 'Coulomb_Counting', '1RC_Model', '2RC_Model', 'DRT_Model'});
-
-%% Display the table in a formatted way
-fprintf('\nSOC Estimation Error Metrics Over All Trips:\n\n');
-fprintf('%-25s %-20s %-20s %-20s %-20s\n', 'Error Metric', 'Coulomb Counting', '1RC Model', '2RC Model', 'DRT Model');
-fprintf('-----------------------------------------------------------------------------------------------\n');
-fprintf('%-25s %-20.6e %-20.6e %-20.6e %-20.6e\n', 'Mean Error (ME)', ME_CC, ME_1RC, ME_2RC, ME_DRT);
-fprintf('%-25s %-20.6e %-20.6e %-20.6e %-20.6e\n', 'Mean Absolute Error (MAE)', MAE_CC, MAE_1RC, MAE_2RC, MAE_DRT);
-fprintf('%-25s %-20.6e %-20.6e %-20.6e %-20.6e\n', 'RMSE', RMSE_CC, RMSE_1RC, RMSE_2RC, RMSE_DRT);
-fprintf('%-25s %-20.6e %-20.6e %-20.6e %-20.6e\n', 'Maximum Error', Max_Error_CC, Max_Error_1RC, Max_Error_2RC, Max_Error_DRT);
-
-%% Optionally, display the table in MATLAB's variable window
-disp(' ');
-disp('SOC Estimation Error Metrics Over All Trips:');
-disp(Results_Table);
 
 %% Plot combined SOC estimates over all trips
 figure;
@@ -578,3 +528,4 @@ function [noisy_I] = Markov(I, epsilon_percent_span)
     end
 
 end
+
