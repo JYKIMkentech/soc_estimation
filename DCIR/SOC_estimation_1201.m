@@ -88,7 +88,7 @@ Qcov1 = [1e-6 0;
 
 % R , Measurement covariance
 
-Rcov1 = 25e-4;
+Rcov1 = 25e-7;
 
 %Rcov2 = 25e-4;
 %Rcov3 = 25e-4;
@@ -299,9 +299,9 @@ title('SOC vs time(sec)')
 figure(3)
 
 plot(t,I-noisy_I)
-xlabel('Time')
-ylabel('noise')
-title('I-noisy_I')
+xlabel('Time');
+ylabel('noise');
+title('I-noisy_I');
 
 figure(4);
 plot(unique_soc, dOCV_dSOC_values_smooth, 'LineWidth', 1.5);
@@ -310,7 +310,15 @@ ylabel('dOCV/dSOC');
 title('docv/dsoc');
 grid on;
 
+figure(5)
 
+plot(t,x_estimate_1RC_all(:,1) - True_SOC, 'b-', 'LineWidth', 1.5, 'DisplayName', 'SOC error')
+hold on
+plot(t,CC_SOC - True_SOC, 'k-', 'LineWidth', 1.5, 'DisplayName', 'SOC error')
+xlabel('time');
+ylabel('SOC error');
+legend('1RC-KF SOC error', 'CC SOC error')
+title('1RC-KF SOC error');
 
 
 %% Function for adding Markov noise
