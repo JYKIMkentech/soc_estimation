@@ -55,7 +55,7 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 P1_init = [1e-4 0;
-            0   1e-4]; % [SOC ; V1] % State covariance
+            0   9.58e-13]; % [SOC ; V1] % State covariance
 P2_init = [1e-4 0        0;
             0   1e-6 0;
             0   0       1e-6]; % [SOC; V1; V2] % State covariance
@@ -68,8 +68,8 @@ end
 
 % Q
 
-Q1 = [1e-3 0;
-      0  1e-3];  % [SOC ; V1] % Process covariance
+Q1 = [1e-4 0;
+      0  9.58e-13];  % [SOC ; V1] % Process covariance
 
 Q2 = [1e-4 0        0;
              0     1e-6    0;
@@ -225,58 +225,42 @@ end
 
 figure;
 
-% 1. Plot Predicted and Estimated SOC and V1, True SOC, and CC SOC
+% 1. Predicted and Estimated SOC and V1, True SOC, and CC SOC
 subplot(3,1,1);
 yyaxis left
 hold on;
 
 % Plot True SOC
-h1 = plot(t, True_SOC, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
-
+plot(t, True_SOC, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
 % Plot CC SOC
-h2 = plot(t, CC_SOC, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
-
-% Plot Predicted SOC (solid line)
-h3 = plot(t, x_pred_1RC_all(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Predicted SOC');
-
-% Plot Estimated SOC (dashed line)
-h4 = plot(t, x_estimate_1RC_all(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC');
-
+plot(t, CC_SOC, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
+% Plot Predicted SOC 
+plot(t, x_pred_1RC_all(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Predicted SOC');
+% Plot Estimated SOC 
+plot(t, x_estimate_1RC_all(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC');
 ylabel('SOC');
-
 yyaxis right
 % Plot Predicted V1 (solid line)
-h5 = plot(t, x_pred_1RC_all(:,2), 'g-', 'LineWidth', 1.5, 'DisplayName', 'Predicted V1');
-
+plot(t, x_pred_1RC_all(:,2), 'g-', 'LineWidth', 1.5, 'DisplayName', 'Predicted V1');
 % Plot Estimated V1 (dashed line)
-h6 = plot(t, x_estimate_1RC_all(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1');
-
+plot(t, x_estimate_1RC_all(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1');
 ylabel('V1 [V]');
-
 xlabel('Time [s]');
 title('Predicted and Estimated SOC and V1 over Time');
-
-% Combine all handles for the legend
-all_handles = [h1, h2, h3, h4, h5, h6];
-legend(all_handles, 'Location', 'best');
-
+legend('show', 'Location', 'best');
 hold off;
 
 % 2. Kalman Gains over Time
 subplot(3,1,2);
 yyaxis left;
-h7 = plot(t, K_1RC_all(:,1), 'b-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain SOC');
+plot(t, K_1RC_all(:,1), 'b-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain SOC');
 ylabel('Kalman Gain for SOC');
-
 yyaxis right;
-h8 = plot(t, K_1RC_all(:,2), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain V1');
+plot(t, K_1RC_all(:,2), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain V1');
 ylabel('Kalman Gain for V1');
-
 xlabel('Time [s]');
 title('Kalman Gains over Time');
-
-% Combine handles for the legend
-legend([h7, h8], 'Location', 'best');
+legend('show', 'Location', 'best');
 
 % 3. Residual over Time
 subplot(3,1,3);
@@ -284,9 +268,6 @@ plot(t, residual_1RC_all, 'k-', 'LineWidth', 1.5);
 xlabel('Time [s]');
 ylabel('Residual');
 title('Residual over Time');
-
-
-
 
 
 
