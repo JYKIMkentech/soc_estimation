@@ -83,9 +83,9 @@ end
 
 % R , Measurement covariance
 
-R1 = 25e-4;
-R2 = 25e-4;
-R3 = 25e-4;
+Rcov_1 = 25e-4;
+Rcov_2 = 25e-4;
+Rcov_3 = 25e-4;
 
 %% 3. Extract ECM parameters
 
@@ -141,7 +141,8 @@ for s = 1: num_trips-16 % trips 수에 대하여
     
     for k = 1:length(t) % 각 trip의 시간에 대해여
 
-        % R0,R1,C ( SOC , 0.5C)
+        % R0,R1,C ( SOC , 0.5C) % R0,R1,C1 ECM PARAMETER인지, Rcov 겹친
+        % parameter인지 확인
         R0 = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
@@ -182,7 +183,7 @@ for s = 1: num_trips-16 % trips 수에 대하여
         V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
 
         % Compute the Kalman gain
-        S_k = H * P_pred_1RC * H' + R1; % Measurement noise covariance
+        S_k = H * P_pred_1RC * H' + Rcov_1; % Measurement noise covariance
         K = (P_pred_1RC * H') / S_k;
 
         % Store the Kalman gain
