@@ -1,7 +1,6 @@
-clc;clear;close all;
+clc; clear; close all;
 
 %% seed setting
-
 rng(13);
 
 %% Font size settings
@@ -27,100 +26,52 @@ tau_discrete = exp(theta_discrete);
 
 % SOC-OCV lookup table (from C/20 test)
 load('soc_ocv.mat', 'soc_ocv'); % [SOC, OCV]
-soc_values = soc_ocv(:, 1);     % SOC values % 1083 x 1
-ocv_values = soc_ocv(:, 2);     % Corresponding OCV values [V] % 1083 x 1
+soc_values = soc_ocv(:, 1);     % SOC values
+ocv_values = soc_ocv(:, 2);     % Corresponding OCV values [V]
 
 load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
 
-Q_batt = 2.7742 ; % 2.7742; % [Ah]
-SOC_begin_true = 0.9907; %0.983;
+Q_batt = 2.7742 ; % [Ah]
+SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.1;
+epsilon_percent_span = 0.2;
 voltage_noise_percent = 0.01;
 
-[unique_ocv, b] = unique(ocv_values); % unique_ocv : 1029x1
-unique_soc = soc_values(b);           % unique_soc : 1029x1  
+[unique_ocv, b] = unique(ocv_values);
+unique_soc = soc_values(b);
 
-% Compute the derivative of OCV with respect to SOC (H 행렬 위해)
+% Compute the derivative of OCV with respect to SOC
 dOCV_dSOC_values = gradient(unique_ocv) ./ gradient(unique_soc);
-
 windowSize = 10; 
 dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 2. Kalman filter settings
-% 1 : 1RC 
-% 2 : 2RC
-% 3 : DRT 
-
-%num_RC = length(tau_discrete);
-
-Pcov1_init = [4e-4 0;
-            0   16e-4]; % [SOC ; V1] % State covariance
-
-
-
-% Pcov2_init = [1e-4 0        0;
-%           0   1e-6 0;
-%           0   0       1e-6]; % [SOC; V1; V2] % State covariance
-
-%Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-%Pcov3_init(1,1) = 1e-13;    % Initial covariance for SOC
-%for i = 2:(1 + num_RC)
-%    Pcov3_init(i,i) = 1e-13; % Initial covariance for each V_i
-%end
+Pcov1_init = [4e-13 0;
+              0   16e-4]; % [SOC ; V1] % State covariance
 
 % Q
-
-Qcov1 = [4e-4 0;
-      0  16e-4];  % [SOC ; V1] % Process covariance
-
-
-
-%Qcov2 = [1e-4 0        0;
-%             0     1e-6    0;
-%             0      0     1e-6]; % [SOC; V1; V2] % Process covariance
-
-%Qcov3 = zeros(1 + num_RC); % Initialize Q3
-%Qcov3(1,1) = 1e-13; %5e-10; % Process noise for SOC
-%for i = 2:(1 + num_RC)
-%    Qcov3(i,i) = 1e-13 ;% 1e-9; % Process noise for each V_i
-%end
+Qcov1 = [4e-13 0;
+         0  16e-4];  % [SOC ; V1] % Process covariance
 
 % R , Measurement covariance
-
 Rcov1 = 5.25e-6;
 
-%Rcov2 = 25e-4;
-%Rcov3 = 25e-4;
-
 %% 3. Extract ECM parameters
-
-% FOR --> vercat으로 수정 (11/30)
 SOC_params = vertcat(optimized_params_struct_final_2RC.SOC);
 R0_params = vertcat(optimized_params_struct_final_2RC.R0);
 R1_params = vertcat(optimized_params_struct_final_2RC.R1);
-R2_params = vertcat(optimized_params_struct_final_2RC.R2);
 C1_params = vertcat(optimized_params_struct_final_2RC.C1);
-C2_params = vertcat(optimized_params_struct_final_2RC.C2);
 
 %% 4. Kalman filter
 
 num_trips = length(udds_data);
 
-True_soc_alltrip = cell(num_trips,1);
-CC_SOC_alltrip = cell(num_trips, 1);
-SOC_est_1RC_alltrip = cell(num_trips, 1);
-SOC_est_2RC_alltrip = cell(num_trips, 1);
-SOC_est_DRT_alltrip = cell(num_trips, 1);
-
-time_offset = 0;
-
 % Initialize SOC,V1,P
 initial_SOC_true = SOC_begin_true;
 initial_SOC_cc = SOC_begin_cc;
 initial_P_estimate_1RC = Pcov1_init;
-initial_SOC_estimate_1RC = initial_SOC_cc; % Or SOC_begin_cc
-initial_V1_estimate_1RC = 0; % Initial V1 estimate
+initial_SOC_estimate_1RC = initial_SOC_cc;
+initial_V1_estimate_1RC = 0;
 
 % Initialize data over all trips
 t_all = [];
@@ -133,55 +84,70 @@ residual_1RC_all_trips = [];
 I_all = [];
 noisy_I_all = [];
 
-for s = 1: num_trips-14 % trips 수에 대하여 
+% Initialize previous trip's end time
+previous_trip_end_time = 0;
+
+for s = 1:num_trips-14 % 트립 수에 대하여
     fprintf('Processing Trip %d/%d...\n', s, num_trips-15);
 
+    % Use Time_duration as time vector
+    t = udds_data(s).Time_duration;
     I = udds_data(s).I;
-    V = udds_data(s).V; 
-    t = udds_data(s).t + time_offset;
-    dt = [t(1); diff(t)];
-    dt(1) = dt(2);
+    V = udds_data(s).V;
 
-    [noisy_I] = Markov(I,epsilon_percent_span); % 전류 : markov noise
-    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % 전압 : gaussian noise
+    % Calculate dt
+    if s == 1
+        dt = [t(1); diff(t)];      % 첫 번째 트립: t(1)을 앞에 추가
+        dt(1) = dt(2);             % dt(1)을 dt(2)로 설정
+    else
+        dt = [t(1) - previous_trip_end_time; diff(t)]; % 나머지 트립: 이전 트립 끝 시간과 현재 트립 첫 시간의 차이
+    end
 
-    True_SOC = initial_SOC_true + cumtrapz(t - time_offset,I)/(3600 * Q_batt);
-    CC_SOC = initial_SOC_cc + cumtrapz(t - time_offset,noisy_I)/(3600 * Q_batt);
+    
+    fprintf('Trip %d, dt(1): %f\n', s, dt(1));
+
+    [noisy_I] = Markov(I, epsilon_percent_span); % 전류: 마르코프 노이즈
+    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % 전압: 가우시안 노이즈
+
+    % Compute True SOC and CC SOC
+    t-t(1)
+    True_SOC = initial_SOC_true + cumtrapz(t - t(1), I)/(3600 * Q_batt);
+    CC_SOC = initial_SOC_cc + cumtrapz(t - t(1), noisy_I)/(3600 * Q_batt);
 
     % 1-RC 
 
     SOC_est_1RC = zeros(length(t), 1);
     V1_est_1RC = zeros(length(t), 1);   
 
-    SOC_estimate_1RC = initial_SOC_estimate_1RC; % 초기 SOC 지정 
-    P_estimate_1RC = initial_P_estimate_1RC;     % 초기 공분산 지정 
-    V1_estimate_1RC = initial_V1_estimate_1RC;   % Initial V1 estimate
+    SOC_estimate_1RC = initial_SOC_estimate_1RC;
+    P_estimate_1RC = initial_P_estimate_1RC;
+    V1_estimate_1RC = initial_V1_estimate_1RC;
 
-    % kalman gain effect 알아보기 (11/30 upadate)
-    x_pred_1RC_all = zeros(length(t), 2);     % 예측 값 (칼만 게인 전)
-    KG_1RC_all = zeros(length(t), 2);          % 칼만 게인 값
-    residual_1RC_all = zeros(length(t), 1);   % 잔차 값 % 칼만 게인 x 잔차 값 더해줌
-    x_estimate_1RC_all = zeros(length(t), 2); % 보정 값 (칼만 게인 후) 
+    % Kalman filter variables
+    x_pred_1RC_all = zeros(length(t), 2);     % Predicted states
+    KG_1RC_all = zeros(length(t), 2);         % Kalman gains
+    residual_1RC_all = zeros(length(t), 1);   % Residuals
+    x_estimate_1RC_all = zeros(length(t), 2); % Updated states
 
-    for k = 1:length(t) % 각 trip의 시간에 대해여
+    for k = 1:length(t) % 각 시간 스텝에 대해
 
-        % R0,R1,C ( SOC , 0.5C)
+        % Interpolate R0, R1, C1 based on SOC
         R0 = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
 
         %% Predict step
-        if k == 1 % 첫번째 시간
-            if s == 1 % 첫번째 trip에 대해서만 , S 번 째 트립부터는 S-1 번째 Trip에서의 V1값 가져오기
+        if k == 1
+            if s == 1
                 V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
             else
-                V1_pred = V1_estimate_1RC;
+                V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
             end
         else 
-            V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));  % Predict RC 전압
+            V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
         end
 
-        % Predict soc 
+        % Predict SOC 
         SOC_pred_1RC = SOC_estimate_1RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
         % Form the predicted state vector
@@ -191,14 +157,8 @@ for s = 1: num_trips-14 % trips 수에 대하여
         x_pred_1RC_all(k, :) = x_pred';
 
         % Predict the error covariance
-        dt(k)
-        R1 * C1
-
-
         A = [1 0;
              0 exp(-dt(k) / (R1 * C1))];
-        L = A * P_estimate_1RC * A
-
         P_pred_1RC = A * P_estimate_1RC * A' + Qcov1;
 
         % Compute OCV_pred and dOCV_dSOC
@@ -209,15 +169,10 @@ for s = 1: num_trips-14 % trips 수에 대하여
         H = [dOCV_dSOC, 1];
 
         % Compute the predicted voltage
-        R0 * noisy_I(k)
         V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
 
         % Compute the Kalman gain
-        H * P_pred_1RC * H'
-        
-        S_k = H * P_pred_1RC * H' + Rcov1; % Measurement noise covariance
-        P_pred_1RC * H'
-        
+        S_k = H * P_pred_1RC * H' + Rcov1;
         KG = (P_pred_1RC * H') / S_k;
 
         % Store the Kalman gain
@@ -225,15 +180,13 @@ for s = 1: num_trips-14 % trips 수에 대하여
 
         %% Update step
 
-        z = noisy_V(k); % Measurement
+        z = noisy_V(k);
         residual = z - V_pred_total;
 
         % Store the residual
         residual_1RC_all(k) = residual;
 
         % Update the estimate
-        KG * residual
-        
         x_estimate = x_pred + KG * residual;
 
         SOC_estimate_1RC = x_estimate(1);
@@ -253,11 +206,14 @@ for s = 1: num_trips-14 % trips 수에 대하여
     % Update initial values for the next trip
     initial_SOC_true = True_SOC(end);
     initial_SOC_cc = CC_SOC(end);
-    initial_SOC_estimate_1RC = SOC_estimate_1RC; % SOC Upate
-    initial_P_estimate_1RC = P_estimate_1RC;     % covariance update
-    initial_V1_estimate_1RC = V1_estimate_1RC;   % V1 update
+    initial_SOC_estimate_1RC = SOC_estimate_1RC;
+    initial_P_estimate_1RC = P_estimate_1RC;
+    initial_V1_estimate_1RC = V1_estimate_1RC;
 
-    % 모든 trip에 이어 붙이기 
+    % Update previous trip's end time
+    previous_trip_end_time = t(end);
+
+    % Concatenate data
     t_all = [t_all; t];
     True_SOC_all = [True_SOC_all; True_SOC];
     CC_SOC_all = [CC_SOC_all; CC_SOC];
@@ -268,30 +224,30 @@ for s = 1: num_trips-14 % trips 수에 대하여
     I_all = [I_all; I];
     noisy_I_all = [noisy_I_all; noisy_I];
 
-    % 2-RC
-
-    time_offset = t(end);
-
 end
 
 % Now plotting using the concatenated variables
 
-% 1. plot SOC,V1 
+% 1. Predicted and Estimated SOC and V1, True SOC, and CC SOC
 figure(1);
 subplot(3,1,1);
 yyaxis left
 hold on;
 
-
-plot(t_all, True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC'); % Plot True SOC
-plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC'); % Plot CC SOC
-plot(t_all, x_pred_1RC_all_trips(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Predicted SOC'); % Plot Predicted SOC 
-plot(t_all, x_estimate_1RC_all_trips(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC'); % Plot Estimated SOC 
+% Plot True SOC
+plot(t_all, True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
+% Plot CC SOC
+plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
+% Plot Predicted SOC 
+plot(t_all, x_pred_1RC_all_trips(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Predicted SOC');
+% Plot Estimated SOC 
+plot(t_all, x_estimate_1RC_all_trips(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC');
 ylabel('SOC');
 yyaxis right
-
-plot(t_all, x_pred_1RC_all_trips(:,2), 'g-', 'LineWidth', 1.5, 'DisplayName', 'Predicted V1'); % Plot Estimated SOC 
-plot(t_all, x_estimate_1RC_all_trips(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1'); % Plot Estimated V1 (dashed line)
+% Plot Predicted V1 (solid line)
+plot(t_all, x_pred_1RC_all_trips(:,2), 'g-', 'LineWidth', 1.5, 'DisplayName', 'Predicted V1');
+% Plot Estimated V1 (dashed line)
+plot(t_all, x_estimate_1RC_all_trips(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1');
 ylabel('V1 [V]');
 xlabel('Time [s]');
 title('Predicted and Estimated SOC and V1 over Time');
@@ -317,24 +273,25 @@ xlabel('Time [s]');
 ylabel('Residual');
 title('Residual over Time');
 
+% 2. SOC 비교 플롯
 figure(2)
-
 plot(t_all, True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
 hold on
 plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
 plot(t_all, x_estimate_1RC_all_trips(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC');
-xlabel('time')
+xlabel('Time [s]')
 ylabel('SOC')
-legend('True soc', 'CC SOC', 'Estimated SOC')
-title('SOC vs time(sec)')
+legend('True SOC', 'CC SOC', 'Estimated SOC')
+title('SOC vs Time (s)')
 
+% 3. 전류 노이즈 플롯
 figure(3)
-
 plot(t_all, I_all - noisy_I_all)
-xlabel('Time');
-ylabel('noise');
-title('I - noisy_I');
+xlabel('Time [s]');
+ylabel('Noise');
+title('I - noisy\_I');
 
+% 4. dOCV/dSOC 플롯
 figure(4);
 plot(unique_soc, dOCV_dSOC_values_smooth, 'LineWidth', 1.5);
 xlabel('SOC');
@@ -342,15 +299,15 @@ ylabel('dOCV/dSOC');
 title('dOCV/dSOC');
 grid on;
 
+% 5. SOC 오차 플롯
 figure(5)
-
 plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC error')
 hold on
 plot(t_all, CC_SOC_all - True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC error')
-xlabel('time');
-ylabel('SOC error');
+xlabel('Time [s]');
+ylabel('SOC Error');
 legend('1RC-KF SOC error', 'CC SOC error')
-title('1RC-KF SOC error');
+title('1RC-KF SOC Error');
 
 %% Function for Adding Markov Noise
 function [noisy_I] = Markov(I, epsilon_percent_span)
@@ -389,4 +346,4 @@ function [noisy_I] = Markov(I, epsilon_percent_span)
         current_state = randsample(1:N, 1, true, P(current_state, :));
     end
 
-end
+end 
