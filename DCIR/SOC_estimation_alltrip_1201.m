@@ -115,14 +115,14 @@ SOC_est_DRT_alltrip = cell(num_trips, 1);
 
 time_offset = 0;
 
-% Initialize initial SOC and Kalman filter variables
+% Initialize SOC,V1,P
 initial_SOC_true = SOC_begin_true;
 initial_SOC_cc = SOC_begin_cc;
 initial_P_estimate_1RC = Pcov1_init;
 initial_SOC_estimate_1RC = initial_SOC_cc; % Or SOC_begin_cc
 initial_V1_estimate_1RC = 0; % Initial V1 estimate
 
-% Initialize variables to store concatenated data over all trips
+% Initialize data over all trips
 t_all = [];
 True_SOC_all = [];
 CC_SOC_all = [];
