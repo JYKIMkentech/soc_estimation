@@ -53,38 +53,38 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-P1_init = [1e-9 0;
+Pcov1_init = [1e-9 0;
             0   1e-9]; % [SOC ; V1] % State covariance
-P2_init = [1e-4 0        0;
+Pcov2_init = [1e-4 0        0;
             0   1e-5 0;
             0   0       1e-6]; % [SOC; V1; V2] % State covariance
 
-P3_init = zeros(1 + num_RC); % Initialize P3_init
-P3_init(1,1) = 1e-13;    % Initial covariance for SOC
+Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
+Pcov3_init(1,1) = 1e-13;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    P3_init(i,i) = 1e-13; % Initial covariance for each V_i
+    Pcov3_init(i,i) = 1e-13; % Initial covariance for each V_i
 end
 
 % Q
 
-Q1 = [1e-4 0;
+Qcov1 = [1e-4 0;
       0  1e-5];  % [SOC ; V1] % Process covariance
 
-Q2 = [1e-4 0        0;
+Qcov2 = [1e-4 0        0;
              0     1e-5    0;
              0      0     1e-6]; % [SOC; V1; V2] % Process covariance
 
-Q3 = zeros(1 + num_RC); % Initialize Q3
-Q3(1,1) = 1e-13; %5e-10; % Process noise for SOC
+Qcov3 = zeros(1 + num_RC); % Initialize Q3
+Qcov3(1,1) = 1e-13; %5e-10; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Q3(i,i) = 1e-13 ;% 1e-9; % Process noise for each V_i
+    Qcov3(i,i) = 1e-13 ;% 1e-9; % Process noise for each V_i
 end
 
 % R , Measurement covariance
 
-R1 = 25e-4;
-R2 = 25e-4;
-R3 = 25e-4;
+Rcov1 = 25e-4;
+Rcov2 = 25e-4;
+Rcov3 = 25e-4;
 
 %% 3. Extract ECM parameters
 
@@ -154,9 +154,9 @@ V1_estimate_2RC = 0; % V1 initial value for 2-RC
 V2_estimate_2RC = 0; % V2 initial value for 2-RC
 
 % Initialize error covariances for all models
-P_estimate_DRT = P3_init;
-P_estimate_1RC = P1_init;
-P_estimate_2RC = P2_init;
+P_estimate_DRT = Pcov3_init;
+P_estimate_1RC = Pcov1_init;
+P_estimate_2RC = Pcov2_init;
 
 % For concatenating SOC estimates over all trips
 % We will concatenate after processing all trips
@@ -253,7 +253,7 @@ for s = 1 : num_trips-16 % For each trip
         for i = 1:num_RC
             A(i+1,i+1) = exp(-dt(k) / (R_i(i) * C_i(i)));
         end
-        P_pred = A * P_estimate_DRT * A' + Q3;
+        P_pred = A * P_estimate_DRT * A' + Qcov3;
 
         % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
@@ -268,7 +268,7 @@ for s = 1 : num_trips-16 % For each trip
         V_pred_total = OCV_pred + sum(V_pred) + R0 * noisy_I(k);
 
         % Compute the Kalman gain
-        S_k = H * P_pred * H' + R3; % Measurement noise covariance
+        S_k = H * P_pred * H' + Rcov3; % Measurement noise covariance
         K = (P_pred * H') / S_k;
 
         % Update the estimate
@@ -338,7 +338,7 @@ for s = 1 : num_trips-16 % For each trip
         % Predict the error covariance
         A = [1 0;
              0 exp(-dt(k) / (R1 * C1))];
-        P_pred = A * P_estimate_1RC * A' + Q1;
+        P_pred = A * P_estimate_1RC * A' + Qcov1;
 
         % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
@@ -351,7 +351,7 @@ for s = 1 : num_trips-16 % For each trip
         V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
 
         % Compute the Kalman gain
-        S_k = H * P_pred * H' + R1; % Measurement noise covariance
+        S_k = H * P_pred * H' + Rcov1; % Measurement noise covariance
         K = (P_pred * H') / S_k;
 
         % Update the estimate
@@ -427,7 +427,7 @@ for s = 1 : num_trips-16 % For each trip
         A = [1 0 0;
              0 exp(-dt(k) / (R1 * C1)) 0;
              0 0 exp(-dt(k) / (R2 * C2))];
-        P_pred = A * P_estimate_2RC * A' + Q2;
+        P_pred = A * P_estimate_2RC * A' + Qcov2;
 
         % Compute OCV_pred and dOCV_dSOC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred, 'linear', 'extrap');
@@ -440,7 +440,7 @@ for s = 1 : num_trips-16 % For each trip
         V_pred_total = OCV_pred + V1_pred + V2_pred + R0 * noisy_I(k);
 
         % Compute the Kalman gain
-        S_k = H * P_pred * H' + R2; % Measurement noise covariance
+        S_k = H * P_pred * H' + Rcov2; % Measurement noise covariance
         K = (P_pred * H') / S_k;
 
         % Update the estimate
