@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 0.5;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -52,9 +52,9 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [1e-13 0;  % 1e-13 to 1e-14 
-            0   16e-4]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
-Pcov2_init = [1e-13 0        0;
+Pcov1_init = [4e-13 0;
+            0   16e-4]; % [SOC ; V1] % State covariance
+Pcov2_init = [4e-13 0        0;
             0   16e-8 0;
             0   0       16e-8]; % [SOC; V1; V2] % State covariance
 
@@ -65,10 +65,10 @@ for i = 2:(1 + num_RC)
 end
 
 % Q
-Qcov1 = [4e-13 0;
+Qcov1 = [4e-14 0;
       0  16e-4];  % [SOC ; V1] % Process covariance
 
-Qcov2 = [4e-13 0        0;
+Qcov2 = [1e-13 0        0;
              0     16e-8    0;
              0      0     16e-8]; % [SOC; V1; V2] % Process covariance
 
@@ -140,7 +140,7 @@ residual_DRT_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-1 % For each trip
+for s = 1:num_trips-15 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     % Use Time_duration as time vector

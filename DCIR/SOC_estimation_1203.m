@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 0.1;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -115,7 +115,7 @@ residual_2RC_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-1 % 트립 수에 대하여
+for s = 1:num_trips-15 % 트립 수에 대하여
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     % Use Time_duration as time vector
