@@ -165,13 +165,6 @@ for s = 1:num_trips-15 % For each trip
     True_SOC = initial_SOC_true + cumtrapz(t - t(1), I)/(3600 * Q_batt);
     CC_SOC = initial_SOC_cc + cumtrapz(t - t(1), noisy_I)/(3600 * Q_batt);
 
-    %% DRT
-
-    gamma = gamma_est_all(s,:); % 1x201
-    delta_theta = theta_discrete(2) - theta_discrete(1); % 0.0476
-    R_i = gamma * delta_theta; % 1x201
-    C_i = tau_discrete' ./ R_i; % 201x1
-
     % 1-RC 
 
     SOC_est_1RC = zeros(length(t), 1);
@@ -205,6 +198,11 @@ for s = 1:num_trips-15 % For each trip
     residual_2RC_all = zeros(length(t), 1);   % Residuals
 
     % DRT
+
+    gamma = gamma_est_all(s,:); % 1x201
+    delta_theta = theta_discrete(2) - theta_discrete(1); % 0.0476
+    R_i = gamma * delta_theta; % 1x201
+    C_i = tau_discrete' ./ R_i; % 201x1
 
     SOC_est_DRT = zeros(length(t),1);
     V_est_DRT = zeros(length(t), num_RC);
@@ -306,16 +304,13 @@ for s = 1:num_trips-15 % For each trip
         %% Predict Step for 2RC
         if k == 1
             if s == 1
-                % Initialize V1_pred and V2_pred using only the current input
                 V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
                 V2_pred = noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
             else
-                % Use the last estimates from the previous trip
                 V1_pred = V1_estimate_2RC;
                 V2_pred = V2_estimate_2RC;
             end
         else
-            % Predict V1 and V2 using the standard prediction equations
             V1_pred = V1_estimate_2RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
             V2_pred = V2_estimate_2RC * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
         end
@@ -396,8 +391,7 @@ for s = 1:num_trips-15 % For each trip
         end
 
         for i = 1:num_RC
-            exp_term = exp(-dt(k) / (R_i(i) * C_i(i)));
-            V_pred_DRT(i) = V_prev_DRT(i) * exp_term + noisy_I(k) * R_i(i) * (1 - exp_term);
+            V_pred_DRT(i) = V_prev_DRT(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
         end
 
         % Form the predicted state vector for DRT

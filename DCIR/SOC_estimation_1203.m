@@ -58,7 +58,7 @@ Rcov1 = 5.25e-6;
 
 %% 2. Kalman filter settings for 2-RC model
 
-Pcov2_init = [1e-13 0 0;
+Pcov2_init = [1e-16 0 0;
               0 16e-8 0;
               0 0 16e-8]; % [SOC ; V1; V2] % State covariance
 
@@ -255,22 +255,19 @@ for s = 1:num_trips-1 % 트립 수에 대하여
         R2 = interp1(SOC_params, R2_params, SOC_estimate_2RC, 'linear', 'extrap');
         C2 = interp1(SOC_params, C2_params, SOC_estimate_2RC, 'linear', 'extrap');
 
-        %% Predict step for 2RC
+        %% Predict Step for 2RC
         if k == 1
             if s == 1
-                V1_prev = 0;
-                V2_prev = 0;
+                V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+                V2_pred = noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
             else
-                V1_prev = V1_estimate_2RC;
-                V2_prev = V2_estimate_2RC;
+                V1_pred = V1_estimate_2RC;
+                V2_pred = V2_estimate_2RC;
             end
         else
-            V1_prev = V1_estimate_2RC;
-            V2_prev = V2_estimate_2RC;
+            V1_pred = V1_estimate_2RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+            V2_pred = V2_estimate_2RC * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
         end
-
-        V1_pred = V1_prev * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
-        V2_pred = V2_prev * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
 
         % Predict SOC for 2RC
         SOC_pred_2RC = SOC_estimate_2RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
@@ -366,11 +363,34 @@ for s = 1:num_trips-1 % 트립 수에 대하여
 
 end
 
-% Now plotting using the concatenated variables
 
-% 1. Predicted and Estimated SOC and V1, V2, True SOC, and CC SOC for 2RC model
+
+
 figure(1);
-subplot(3,1,1);
+
+% 1. Predicted and Estimated SOC and V1, True SOC, and CC SOC for 1RC model
+subplot(3,2,1);
+yyaxis left
+hold on;
+
+% Plot True SOC
+plot(t_all, True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
+% Plot CC SOC
+plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
+% Plot Estimated SOC for 1RC
+plot(t_all, x_estimate_1RC_all_trips(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (1RC)');
+ylabel('SOC');
+% yyaxis right
+% % Plot Estimated V1 for 1RC
+% plot(t_all, x_estimate_1RC_all_trips(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1 (1RC)');
+%ylabel('Voltage [V]');
+xlabel('Time [s]');
+title('Predicted and Estimated SOC and V1 over Time (1RC)');
+legend('show', 'Location', 'best');
+hold off;
+
+% 2. Predicted and Estimated SOC, V1, and V2, True SOC, and CC SOC for 2RC model
+subplot(3,2,2);
 yyaxis left
 hold on;
 
@@ -381,18 +401,30 @@ plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
 % Plot Estimated SOC for 2RC
 plot(t_all, x_estimate_2RC_all_trips(:,1), 'r--', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (2RC)');
 ylabel('SOC');
-yyaxis right
-% Plot Estimated V1 and V2 for 2RC
-plot(t_all, x_estimate_2RC_all_trips(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1 (2RC)');
-plot(t_all, x_estimate_2RC_all_trips(:,3), 'm--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V2 (2RC)');
-ylabel('Voltage [V]');
+% yyaxis right
+% % Plot Estimated V1 and V2 for 2RC
+% plot(t_all, x_estimate_2RC_all_trips(:,2), 'g--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V1 (2RC)');
+% plot(t_all, x_estimate_2RC_all_trips(:,3), 'm--', 'LineWidth', 1.5, 'DisplayName', 'Estimated V2 (2RC)');
+%ylabel('Voltage [V]');
 xlabel('Time [s]');
 title('Predicted and Estimated SOC, V1, and V2 over Time (2RC)');
 legend('show', 'Location', 'best');
 hold off;
 
-% 2. Kalman Gains over Time for 2RC
-subplot(3,1,2);
+% 3. Kalman Gains over Time for 1RC
+subplot(3,2,3);
+yyaxis left;
+plot(t_all, KG_1RC_all_trips(:,1), 'b-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain SOC (1RC)');
+ylabel('Kalman Gain for SOC');
+yyaxis right;
+plot(t_all, KG_1RC_all_trips(:,2), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain V1 (1RC)');
+ylabel('Kalman Gain for V1');
+xlabel('Time [s]');
+title('Kalman Gains over Time (1RC)');
+legend('show', 'Location', 'best');
+
+% 4. Kalman Gains over Time for 2RC
+subplot(3,2,4);
 yyaxis left;
 plot(t_all, KG_2RC_all_trips(:,1), 'b-', 'LineWidth', 1.5, 'DisplayName', 'Kalman Gain SOC (2RC)');
 ylabel('Kalman Gain for SOC');
@@ -404,12 +436,20 @@ xlabel('Time [s]');
 title('Kalman Gains over Time (2RC)');
 legend('show', 'Location', 'best');
 
-% 3. Residual over Time for 2RC
-subplot(3,1,3);
+% 5. Residual over Time for 1RC
+subplot(3,2,5);
+plot(t_all, residual_1RC_all_trips, 'k-', 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('Residual');
+title('Residual over Time (1RC)');
+
+% 6. Residual over Time for 2RC
+subplot(3,2,6);
 plot(t_all, residual_2RC_all_trips, 'k-', 'LineWidth', 1.5);
 xlabel('Time [s]');
 ylabel('Residual');
 title('Residual over Time (2RC)');
+
 
 % 2. SOC 비교 플롯
 figure(2)
