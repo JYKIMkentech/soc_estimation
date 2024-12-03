@@ -327,7 +327,7 @@ function [noisy_I] = Markov(I, epsilon_percent_span)
     end
 
     % Initialize state tracking
-    initial_state = ceil(N/2); 
+    initial_state = 48; 
     current_state = initial_state;
 
     % Initialize output variables
