@@ -48,15 +48,20 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 2. Kalman Filter Settings
 
+%% 1204 covariance 설정
+
+Voltage_cov = logspace(-4,-10,5);
+SOC_cov = [1e-13, 1e-14];
+
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [1e-13 0;  % 1e-13 to 1e-14 
+Pcov1_init = [1e-14 0;  % 1e-13 to 1e-14 
             0   16e-4]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
-Pcov2_init = [1e-13 0        0;
-            0   16e-8 0;
-            0   0       16e-8]; % [SOC; V1; V2] % State covariance
+Pcov2_init = [1e-14 0        0;
+            0   16e-10 0;
+            0   0       8e-10]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
 Pcov3_init(1,1) = 4e-13;    % Initial covariance for SOC
@@ -140,7 +145,7 @@ residual_DRT_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-1 % For each trip
+for s = 1:num_trips-16 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     % Use Time_duration as time vector
