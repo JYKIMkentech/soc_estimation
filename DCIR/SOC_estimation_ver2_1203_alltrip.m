@@ -57,11 +57,11 @@ SOC_cov = [1e-13, 1e-14];
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [1e-14 0;  % 1e-13 to 1e-14 
-            0   16e-4]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
+Pcov1_init = [1e-13 0;  % 1e-13 to 1e-14 
+            0   1e-4]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
 Pcov2_init = [1e-14 0        0;
-            0   16e-10 0;
-            0   0       8e-10]; % [SOC; V1; V2] % State covariance
+            0   1e-4 0;
+            0   0       1e-10]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
 Pcov3_init(1,1) = 4e-13;    % Initial covariance for SOC
