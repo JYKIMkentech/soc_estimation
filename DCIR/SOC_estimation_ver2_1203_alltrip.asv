@@ -103,9 +103,9 @@ Pcov2_init = [3e-14 0        0;
             0   0      1e-14/2 ]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-Pcov3_init(1,1) = 9e-17;    % Initial covariance for SOC
+Pcov3_init(1,1) = 5e-14;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    Pcov3_init(i,i) = 5e-13/(i-1) ; % Initial covariance for each V_i
+    Pcov3_init(i,i) = 5e-14/(i-1); % Initial covariance for each V_i
 end
 
 % Q
@@ -117,9 +117,9 @@ Qcov2 = [3e-14 0        0;
              0      0     1e-14/2 ]; % [SOC; V1; V2] % Process covariance
 
 Qcov3 = zeros(1 + num_RC); % Initialize Q3
-Qcov3(1,1) = 9e-13; % Process noise for SOC
+Qcov3(1,1) = 5e-14; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Qcov3(i,i) = 5e-13/(i-1)  ;% Process noise for each V_i
+    Qcov3(i,i) = 5e-14/(i-1)  ;% Process noise for each V_i
 end
 
 % R , Measurement covariance
