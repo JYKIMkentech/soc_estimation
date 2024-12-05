@@ -50,40 +50,40 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 1204 covariance 설정
 
-Voltage_cov = logspace(-17,-25,6);
+Voltage_cov = logspace(-15,-20,6);
 %SOC_cov = [1e-13, 1e-14];
 
-soc_cov = 2e-14;
-V_cov = Voltage_cov(1);
+soc_cov = 1e-15;
+V_cov = Voltage_cov(2);
 
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [soc_cov 0;  % 1e-13 to 1e-14 
-            0   V_cov ]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
-Pcov2_init = [soc_cov 0        0;
-            0   V_cov/2  0;
-            0   0      V_cov/2 ]; % [SOC; V1; V2] % State covariance
+Pcov1_init = [soc_cov 0;  
+            0   V_cov ]; 
+Pcov2_init = [ 1.4 * soc_cov 0        0;
+            0   V_cov/4  0;
+            0   0      V_cov/4]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-Pcov3_init(1,1) = soc_cov;    % Initial covariance for SOC
+Pcov3_init(1,1) = 20 * soc_cov;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    Pcov3_init(i,i) = V_cov/201; % Initial covariance for each V_i
+    Pcov3_init(i,i) = V_cov/201^2; % Initial covariance for each V_i
 end
 
 % Q
 Qcov1 = [soc_cov 0;
       0  V_cov ];  % [SOC ; V1] % Process covariance
 
-Qcov2 = [soc_cov 0        0;
-             0     V_cov/2     0;
-             0      0     V_cov/2 ]; % [SOC; V1; V2] % Process covariance
+Qcov2 = [ 1.4 * soc_cov    0        0;
+             0     V_cov/4     0;
+             0      0     V_cov/4 ]; % [SOC; V1; V2] % Process covariance
 
 Qcov3 = zeros(1 + num_RC); % Initialize Q3
-Qcov3(1,1) = soc_cov; % Process noise for SOC
+Qcov3(1,1) =  20 * soc_cov; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Qcov3(i,i) = V_cov/201 ;% Process noise for each V_i
+    Qcov3(i,i) = V_cov/201^2;% Process noise for each V_i
 end
 
 % R , Measurement covariance
@@ -185,7 +185,7 @@ residual_DRT_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-15 % For each trip
+for s = 1:num_trips-3 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     % Use Time_duration as time vector
