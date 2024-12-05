@@ -53,43 +53,80 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 Voltage_cov = logspace(-4,-10,5);
 SOC_cov = [1e-13, 1e-14];
 
-cov_soc = 1e-13;
-cov_rc = 8e-6;
+% cov_soc = 1e-13;
+% cov_rc = 1e-10;
+% 
+% % Number of RC elements for DRT model
+% num_RC = length(tau_discrete);
+% 
+% % P
+% Pcov1_init = [cov_soc 0;  % 1e-13 to 1e-14 
+%             0   cov_rc ]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
+% Pcov2_init = [cov_soc 0        0;
+%             0   cov_rc  0;
+%             0   0      cov_rc /2]; % [SOC; V1; V2] % State covariance
+% 
+% Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
+% Pcov3_init(1,1) = cov_soc;    % Initial covariance for SOC
+% for i = 2:(1 + num_RC)
+%     Pcov3_init(i,i) = cov_rc /(i-1); % Initial covariance for each V_i
+% end
+% 
+% % Q
+% Qcov1 = [cov_soc 0;
+%       0  cov_rc ];  % [SOC ; V1] % Process covariance
+% 
+% Qcov2 = [cov_soc 0        0;
+%              0     cov_rc     0;
+%              0      0     cov_rc /2]; % [SOC; V1; V2] % Process covariance
+% 
+% Qcov3 = zeros(1 + num_RC); % Initialize Q3
+% Qcov3(1,1) = cov_soc; % Process noise for SOC
+% for i = 2:(1 + num_RC)
+%     Qcov3(i,i) = cov_rc /(i-1) ;% Process noise for each V_i
+% end
+% 
+% % R , Measurement covariance
+% Rcov1 = 5.25e-6;
+% Rcov2 = 5.25e-6;
+% Rcov3 = 5.25e-6;
 
+%%
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [cov_soc 0;  % 1e-13 to 1e-14 
-            0   cov_rc ]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
-Pcov2_init = [cov_soc 0        0;
-            0   cov_rc  0;
-            0   0      cov_rc /2]; % [SOC; V1; V2] % State covariance
+Pcov1_init = [2e-14 0;  % 1e-13 to 1e-14 
+            0   1e-14 ]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
+Pcov2_init = [3e-14 0        0;
+            0   1e-14   0;
+            0   0      1e-14/2 ]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-Pcov3_init(1,1) = cov_soc;    % Initial covariance for SOC
+Pcov3_init(1,1) = 1e-13;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
-    Pcov3_init(i,i) = cov_rc /(i-1); % Initial covariance for each V_i
+    Pcov3_init(i,i) = 5e-12/(i-1) ; % Initial covariance for each V_i
 end
 
 % Q
-Qcov1 = [cov_soc 0;
-      0  cov_rc ];  % [SOC ; V1] % Process covariance
+Qcov1 = [2e-14 0;
+      0  1e-14 ];  % [SOC ; V1] % Process covariance
 
-Qcov2 = [cov_soc 0        0;
-             0     cov_rc     0;
-             0      0     cov_rc /2]; % [SOC; V1; V2] % Process covariance
+Qcov2 = [3e-14 0        0;
+             0     1e-14      0;
+             0      0     1e-14/2 ]; % [SOC; V1; V2] % Process covariance
 
 Qcov3 = zeros(1 + num_RC); % Initialize Q3
-Qcov3(1,1) = cov_soc; % Process noise for SOC
+Qcov3(1,1) = 1e-13; % Process noise for SOC
 for i = 2:(1 + num_RC)
-    Qcov3(i,i) = cov_rc /(i-1) ;% Process noise for each V_i
+    Qcov3(i,i) = 5e-12/(i-1)  ;% Process noise for each V_i
 end
 
 % R , Measurement covariance
 Rcov1 = 5.25e-6;
 Rcov2 = 5.25e-6;
 Rcov3 = 5.25e-6;
+
 
 
 %% 3. Extract ECM Parameters
@@ -148,7 +185,7 @@ residual_DRT_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-15 % For each trip
+for s = 1:num_trips-16 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     % Use Time_duration as time vector
