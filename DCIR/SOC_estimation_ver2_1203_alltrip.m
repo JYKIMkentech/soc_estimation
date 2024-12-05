@@ -50,11 +50,11 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 1204 covariance 설정
 
-Voltage_cov = logspace(-4,-10,5);
-SOC_cov = [1e-13, 1e-14];
+Voltage_cov = logspace(-17,-25,6);
+%SOC_cov = [1e-13, 1e-14];
 
-soc_cov = 1e-14;
-V_cov = Voltage_cov(5);
+soc_cov = 2e-14;
+V_cov = Voltage_cov(1);
 
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
@@ -669,7 +669,7 @@ hold off;
 
 %% SOC Error Comparison
 figure('Name', 'SOC Error Comparison');
-plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC Error');
+plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'r-', 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC Error');
 hold on;
 plot(t_all, x_estimate_2RC_all_trips(:,1) - True_SOC_all, 'g-', 'LineWidth', 1.5, 'DisplayName', '2RC-KF SOC Error');
 plot(t_all, x_estimate_DRT_all_trips(:,1) - True_SOC_all, 'm-', 'LineWidth', 1.5, 'DisplayName', 'DRT-KF SOC Error');
