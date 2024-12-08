@@ -432,6 +432,16 @@ for s = 1:num_trips-1 % For each trip
 end
 
 %% Plotting for 1RC Model
+
+% 컬러 정의 (RGB)
+color_true = [0, 0, 0];                % Black
+color_cc   = [0,0.4470,0.7410];        % Blue tone
+color_1rc  = [0.8350,0.3333,0.0000];   % Orange tone
+color_2rc  = [0.9020,0.6235,0.0000];   % Gold tone
+color_drt  = [0.8,0.4745,0.6549];      % Purple tone
+
+
+
 figure('Name', '1RC Model Results');
 subplot(4,1,1);
 hold on;
@@ -547,12 +557,12 @@ legend('show', 'Location', 'best');
 
 %% SOC Comparison Plot
 figure('Name', 'SOC Comparison Across Models');
-plot(t_all, True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'True SOC');
+plot(t_all, True_SOC_all, 'Color', color_true, 'LineWidth', 1.5, 'DisplayName', 'True SOC');
 hold on;
-plot(t_all, CC_SOC_all, 'b-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
-plot(t_all, x_estimate_1RC_all_trips(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (1RC)');
-plot(t_all, x_estimate_2RC_all_trips(:,1), 'g-', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (2RC)');
-plot(t_all, x_estimate_DRT_all_trips(:,1), 'm-', 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (DRT)');
+plot(t_all, CC_SOC_all, 'Color', color_cc, 'LineWidth', 1.5, 'DisplayName', 'CC SOC');
+plot(t_all, x_estimate_1RC_all_trips(:,1), 'Color', color_1rc, 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (1RC)');
+plot(t_all, x_estimate_2RC_all_trips(:,1), 'Color', color_2rc, 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (2RC)');
+plot(t_all, x_estimate_DRT_all_trips(:,1), 'Color', color_drt, 'LineWidth', 1.5, 'DisplayName', 'Estimated SOC (DRT)');
 xlabel('Time [s]');
 ylabel('SOC');
 title('SOC Comparison Across Models');
@@ -561,11 +571,11 @@ hold off;
 
 %% SOC Error Comparison
 figure('Name', 'SOC Error Comparison');
-plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'r-', 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC Error');
+plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'Color', color_1rc, 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC Error');
 hold on;
-plot(t_all, x_estimate_2RC_all_trips(:,1) - True_SOC_all, 'g-', 'LineWidth', 1.5, 'DisplayName', '2RC-KF SOC Error');
-plot(t_all, x_estimate_DRT_all_trips(:,1) - True_SOC_all, 'm-', 'LineWidth', 1.5, 'DisplayName', 'DRT-KF SOC Error');
-plot(t_all, CC_SOC_all - True_SOC_all, 'k-', 'LineWidth', 1.5, 'DisplayName', 'CC SOC Error');
+plot(t_all, x_estimate_2RC_all_trips(:,1) - True_SOC_all, 'Color', color_2rc, 'LineWidth', 1.5, 'DisplayName', '2RC-KF SOC Error');
+plot(t_all, x_estimate_DRT_all_trips(:,1) - True_SOC_all, 'Color', color_drt, 'LineWidth', 1.5, 'DisplayName', 'DRT-KF SOC Error');
+plot(t_all, CC_SOC_all - True_SOC_all, 'Color', color_cc, 'LineWidth', 1.5, 'DisplayName', 'CC SOC Error');
 xlabel('Time [s]');
 ylabel('SOC Error');
 title('SOC Error Comparison');
@@ -586,12 +596,6 @@ xlabel('SOC');
 ylabel('dOCV/dSOC');
 title('Derivative of OCV with respect to SOC');
 grid on;
-
-figure;
-plot(t, markov_states, 'LineWidth', 1.5);
-xlabel('Time [s]');
-ylabel('State Index');
-title('Markov State Transition over Time');
 
 %% Compute and Display RMSE
 rmse_True_1RC = sqrt(mean((x_estimate_1RC_all_trips(:,1) - True_SOC_all).^2));
