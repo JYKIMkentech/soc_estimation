@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 0.3;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -48,11 +48,7 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 2. Kalman Filter Settings
 
-%% 1204 covariance 설정
-
 Voltage_cov = logspace(-15,-20,6);
-%SOC_cov = [1e-13, 1e-14];
-
 soc_cov = 1e-15;
 V_cov = Voltage_cov(2);
 
@@ -62,12 +58,12 @@ num_RC = length(tau_discrete);
 % P
 Pcov1_init = [soc_cov 0;  
             0   V_cov ]; 
-Pcov2_init = [ 1.4 * soc_cov 0        0;
+Pcov2_init = [ 2 *  soc_cov 0        0;
             0   V_cov/4  0;
             0   0      V_cov/4]; % [SOC; V1; V2] % State covariance
 
 Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-Pcov3_init(1,1) = 20 * soc_cov;    % Initial covariance for SOC
+Pcov3_init(1,1) = 30 * soc_cov;    % Initial covariance for SOC
 for i = 2:(1 + num_RC)
     Pcov3_init(i,i) = V_cov/201^2; % Initial covariance for each V_i
 end
@@ -76,12 +72,12 @@ end
 Qcov1 = [soc_cov 0;
       0  V_cov ];  % [SOC ; V1] % Process covariance
 
-Qcov2 = [ 1.4 * soc_cov    0        0;
+Qcov2 = [ 2 * soc_cov    0        0;
              0     V_cov/4     0;
              0      0     V_cov/4 ]; % [SOC; V1; V2] % Process covariance
 
 Qcov3 = zeros(1 + num_RC); % Initialize Q3
-Qcov3(1,1) =  20 * soc_cov; % Process noise for SOC
+Qcov3(1,1) =  30 * soc_cov; % Process noise for SOC
 for i = 2:(1 + num_RC)
     Qcov3(i,i) = V_cov/201^2;% Process noise for each V_i
 end
@@ -90,44 +86,6 @@ end
 Rcov1 = 5.25e-6;
 Rcov2 = 5.25e-6;
 Rcov3 = 5.25e-6;
-
-%%
-% Number of RC elements for DRT model
-% num_RC = length(tau_discrete);
-% 
-% % P
-% Pcov1_init = [2e-14 0;  % 1e-13 to 1e-14 
-%             0   1e-10 ]; % [SOC ; V1] % State covariance % 1e-4 to 1e-10 
-% Pcov2_init = [3e-14 0        0;
-%             0   1e-10/2   0;
-%             0   0      1e-10/2 ]; % [SOC; V1; V2] % State covariance
-% 
-% Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-% Pcov3_init(1,1) = 5e-13;    % Initial covariance for SOC
-% for i = 2:(1 + num_RC)
-%     Pcov3_init(i,i) = 5e-10/201; % Initial covariance for each V_i
-% end
-% 
-% % Q
-% Qcov1 = [2e-14 0;
-%       0  1e-14 ];  % [SOC ; V1] % Process covariance
-% 
-% Qcov2 = [3e-14 0        0;
-%              0     1e-10/2      0;
-%              0      0     1e-10/2 ]; % [SOC; V1; V2] % Process covariance
-% 
-% Qcov3 = zeros(1 + num_RC); % Initialize Q3
-% Qcov3(1,1) = 5e-13; % Process noise for SOC
-% for i = 2:(1 + num_RC)
-%     Qcov3(i,i) = 5e-10/201  ;% Process noise for each V_i
-% end
-% 
-% % R , Measurement covariance
-% Rcov1 = 5.25e-6;
-% Rcov2 = 5.25e-6;
-% Rcov3 = 5.25e-6;
-
-
 
 %% 3. Extract ECM Parameters
 SOC_params = vertcat(optimized_params_struct_final_2RC.SOC);
@@ -185,7 +143,7 @@ residual_DRT_all_trips = [];
 % Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-3 % For each trip
+for s = 1:num_trips-1 % For each trip
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     % Use Time_duration as time vector
@@ -257,16 +215,14 @@ for s = 1:num_trips-3 % For each trip
     P_estimate_DRT = initial_P_estimate_DRT;
 
     % Kalman filter variables for DRT
-    x_pred_DRT_all = zeros(length(t), 1 + num_RC); % [SOC ; V_DRT(1) ; V_DRT(2) ; ... ; V_DRT(201)]
-    x_estimate_DRT_all = zeros(length(t), 1 + num_RC); % [SOC ; V_DRT(1) ; V_DRT(2) ; ... ; V_DRT(201)]
-    KG_DRT_all = zeros(length(t), 1 + num_RC); % [KG_SOC , KG_V_DRT(1), ..., KG_V_DRT(201)]
-    residual_DRT_all = zeros(length(t), 1); % Residuals
+    x_pred_DRT_all = zeros(length(t), 1 + num_RC); 
+    x_estimate_DRT_all = zeros(length(t), 1 + num_RC); 
+    KG_DRT_all = zeros(length(t), 1 + num_RC);
+    residual_DRT_all = zeros(length(t), 1);
 
     for k = 1:length(t) % For each time step
 
         %% 1RC
-
-        % Interpolate R0, R1, C1 based on SOC for 1RC
         R0 = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
@@ -282,55 +238,38 @@ for s = 1:num_trips-3 % For each trip
             V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
         end
 
-        % Predict SOC for 1RC
         SOC_pred_1RC = SOC_estimate_1RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
-        % Form the predicted state vector for 1RC
         x_pred = [SOC_pred_1RC; V1_pred];
-
-        % Store the predicted state vector for 1RC
         x_pred_1RC_all(k, :) = x_pred';
 
-        % Predict the error covariance for 1RC
         A = [1 0;
              0 exp(-dt(k) / (R1 * C1))];
         P_pred_1RC = A * P_estimate_1RC * A' + Qcov1;
 
-        % Compute OCV_pred and dOCV_dSOC for 1RC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred_1RC, 'linear', 'extrap');
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred_1RC, 'linear', 'extrap');
 
-        % Measurement matrix H for 1RC
         H = [dOCV_dSOC, 1];
 
-        % Compute the predicted voltage for 1RC
         V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
 
-        % Compute the Kalman gain for 1RC
         S_k = H * P_pred_1RC * H' + Rcov1;
         KG = (P_pred_1RC * H') / S_k;
-
-        % Store the Kalman gain for 1RC
         KG_1RC_all(k, :) = KG';
 
         %% Update Step for 1RC
-
         z = noisy_V(k);
         residual = z - V_pred_total;
-
-        % Store the residual for 1RC
         residual_1RC_all(k) = residual;
 
-        % Update the estimate for 1RC
         x_estimate = x_pred + KG * residual;
 
         SOC_estimate_1RC = x_estimate(1);
         V1_estimate_1RC = x_estimate(2);
 
-        % Store the updated state vector for 1RC
         x_estimate_1RC_all(k, :) = x_estimate';
 
-        % Update the error covariance for 1RC
         P_estimate_1RC = (eye(2) - KG * H) * P_pred_1RC;
 
         SOC_est_1RC(k) = x_estimate(1);
@@ -338,15 +277,12 @@ for s = 1:num_trips-3 % For each trip
 
 
         %% 2RC
-
-        % Interpolate R0, R1, C1, R2, C2 based on SOC for 2RC
         R0 = interp1(SOC_params, R0_params, SOC_estimate_2RC, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate_2RC, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate_2RC, 'linear', 'extrap');
         R2 = interp1(SOC_params, R2_params, SOC_estimate_2RC, 'linear', 'extrap');
         C2 = interp1(SOC_params, C2_params, SOC_estimate_2RC, 'linear', 'extrap');
 
-        %% Predict Step for 2RC
         if k == 1
             if s == 1
                 V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
@@ -360,57 +296,39 @@ for s = 1:num_trips-3 % For each trip
             V2_pred = V2_estimate_2RC * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
         end
 
-        % Predict SOC for 2RC
         SOC_pred_2RC = SOC_estimate_2RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
-        % Form the predicted state vector for 2RC
         x_pred = [SOC_pred_2RC; V1_pred; V2_pred];
-
-        % Store the predicted state vector for 2RC
         x_pred_2RC_all(k, :) = x_pred';
 
-        % Predict the error covariance for 2RC
         A = [1 0 0;
              0 exp(-dt(k) / (R1 * C1)) 0;
              0 0 exp(-dt(k) / (R2 * C2))];
         P_pred_2RC = A * P_estimate_2RC * A' + Qcov2;
 
-        % Compute OCV_pred and dOCV_dSOC for 2RC
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred_2RC, 'linear', 'extrap');
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred_2RC, 'linear', 'extrap');
 
-        % Measurement matrix H for 2RC
         H = [dOCV_dSOC, 1, 1];
 
-        % Compute the predicted voltage for 2RC
         V_pred_total = OCV_pred + V1_pred + V2_pred + R0 * noisy_I(k);
 
-        % Compute the Kalman gain for 2RC
         S_k = H * P_pred_2RC * H' + Rcov2;
         KG = (P_pred_2RC * H') / S_k;
-
-        % Store the Kalman gain for 2RC
         KG_2RC_all(k, :) = KG';
-
-        %% Update Step for 2RC
 
         z = noisy_V(k);
         residual = z - V_pred_total;
-
-        % Store the residual for 2RC
         residual_2RC_all(k) = residual;
 
-        % Update the estimate for 2RC
         x_estimate = x_pred + KG * residual;
 
         SOC_estimate_2RC = x_estimate(1);
         V1_estimate_2RC = x_estimate(2);
         V2_estimate_2RC = x_estimate(3);
 
-        % Store the updated state vector for 2RC
         x_estimate_2RC_all(k, :) = x_estimate';
 
-        % Update the error covariance for 2RC
         P_estimate_2RC = (eye(3) - KG * H) * P_pred_2RC;
 
         SOC_est_2RC(k) = x_estimate(1);
@@ -419,12 +337,8 @@ for s = 1:num_trips-3 % For each trip
 
 
         %% DRT
-
-        % Predict SOC for DRT
         SOC_pred_DRT = SOC_estimate_DRT + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
-        % RC voltage predictions
-        V_pred_DRT = zeros(num_RC, 1);
         if k == 1
             if s == 1
                 V_prev_DRT = zeros(num_RC,1);
@@ -435,55 +349,39 @@ for s = 1:num_trips-3 % For each trip
             V_prev_DRT = V_estimate_DRT;
         end
 
+        V_pred_DRT = zeros(num_RC, 1);
         for i = 1:num_RC
             V_pred_DRT(i) = V_prev_DRT(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
         end
 
-        % Form the predicted state vector for DRT
         x_pred = [SOC_pred_DRT; V_pred_DRT];
-
-        % Store the predicted state vector for DRT
         x_pred_DRT_all(k, :) = x_pred';
 
-        % Predict the error covariance for DRT
         A_DRT = diag([1; exp(-dt(k) ./ (R_i .* C_i))']);
         P_pred_DRT = A_DRT * P_estimate_DRT * A_DRT' + Qcov3;
 
-        % Compute OCV_pred and dOCV_dSOC for DRT
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred_DRT, 'linear', 'extrap');
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred_DRT, 'linear', 'extrap');
 
-        % Measurement matrix H for DRT
         H_DRT = [dOCV_dSOC, ones(1, num_RC)];
 
-        % Compute the predicted voltage for DRT
         V_pred_total_DRT = OCV_pred + sum(V_pred_DRT) + R0 * noisy_I(k);
 
-        % Compute the Kalman gain for DRT
         S_k_DRT = H_DRT * P_pred_DRT * H_DRT' + Rcov3;
         KG_DRT = (P_pred_DRT * H_DRT') / S_k_DRT;
-
-        % Store the Kalman gain for DRT
         KG_DRT_all(k, :) = KG_DRT';
-
-        %% Update Step for DRT
 
         z = noisy_V(k);
         residual_DRT = z - V_pred_total_DRT;
-
-        % Store the residual for DRT
         residual_DRT_all(k) = residual_DRT;
 
-        % Update the estimate for DRT
         x_estimate_DRT = x_pred + KG_DRT * residual_DRT;
 
         SOC_estimate_DRT = x_estimate_DRT(1);
         V_estimate_DRT = x_estimate_DRT(2:end);
 
-        % Store the updated state vector for DRT
         x_estimate_DRT_all(k, :) = x_estimate_DRT';
 
-        % Update the error covariance for DRT
         P_estimate_DRT = (eye(1 + num_RC) - KG_DRT * H_DRT) * P_pred_DRT;
 
         SOC_est_DRT(k) = SOC_estimate_DRT;
@@ -491,28 +389,26 @@ for s = 1:num_trips-3 % For each trip
 
     end
 
-    % Update initial values for the next trip for 1RC
+    % Update initial values for the next trip
     initial_SOC_true = True_SOC(end);
     initial_SOC_cc = CC_SOC(end);
+
     initial_SOC_estimate_1RC = SOC_estimate_1RC;
     initial_P_estimate_1RC = P_estimate_1RC;
     initial_V1_estimate_1RC = V1_estimate_1RC;
 
-    % Update initial values for the next trip for 2RC
     initial_SOC_estimate_2RC = SOC_estimate_2RC;
     initial_V1_estimate_2RC = V1_estimate_2RC;
     initial_V2_estimate_2RC = V2_estimate_2RC;
     initial_P_estimate_2RC = P_estimate_2RC;
 
-    % Update initial values for the next trip for DRT
     initial_SOC_estimate_DRT = SOC_estimate_DRT;
     initial_V_estimate_DRT = V_estimate_DRT;
     initial_P_estimate_DRT = P_estimate_DRT;
 
-    % Update previous trip's end time
     previous_trip_end_time = t(end);
 
-    % Concatenate data for 1RC
+    % Concatenate data
     t_all = [t_all; t];
     True_SOC_all = [True_SOC_all; True_SOC];
     CC_SOC_all = [CC_SOC_all; CC_SOC];
@@ -523,21 +419,17 @@ for s = 1:num_trips-3 % For each trip
     I_all = [I_all; I];
     noisy_I_all = [noisy_I_all; noisy_I];
 
-    % Concatenate data for 2RC
     x_pred_2RC_all_trips = [x_pred_2RC_all_trips; x_pred_2RC_all];
     x_estimate_2RC_all_trips = [x_estimate_2RC_all_trips; x_estimate_2RC_all];
     KG_2RC_all_trips = [KG_2RC_all_trips; KG_2RC_all];
     residual_2RC_all_trips = [residual_2RC_all_trips; residual_2RC_all];
 
-    % Concatenate data for DRT
     x_pred_DRT_all_trips = [x_pred_DRT_all_trips; x_pred_DRT_all];
     x_estimate_DRT_all_trips = [x_estimate_DRT_all_trips; x_estimate_DRT_all];
     KG_DRT_all_trips = [KG_DRT_all_trips; KG_DRT_all];
     residual_DRT_all_trips = [residual_DRT_all_trips; residual_DRT_all];
 
 end
-
-% Now plotting using the concatenated variables
 
 %% Plotting for 1RC Model
 figure('Name', '1RC Model Results');
@@ -695,6 +587,23 @@ ylabel('dOCV/dSOC');
 title('Derivative of OCV with respect to SOC');
 grid on;
 
+figure;
+plot(t, markov_states, 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('State Index');
+title('Markov State Transition over Time');
+
+%% Compute and Display RMSE
+rmse_True_1RC = sqrt(mean((x_estimate_1RC_all_trips(:,1) - True_SOC_all).^2));
+rmse_True_2RC = sqrt(mean((x_estimate_2RC_all_trips(:,1) - True_SOC_all).^2));
+rmse_True_DRT = sqrt(mean((x_estimate_DRT_all_trips(:,1) - True_SOC_all).^2));
+rmse_True_CC  = sqrt(mean((CC_SOC_all - True_SOC_all).^2));
+
+fprintf("\nRMSE of SOC Estimation:\n");
+fprintf("CC RMSE: %.6f\n", rmse_True_CC);
+fprintf("1RC RMSE: %.6f\n", rmse_True_1RC);
+fprintf("2RC RMSE: %.6f\n", rmse_True_2RC);
+fprintf("DRT RMSE: %.6f\n", rmse_True_DRT);
 
 %% Function for Adding Markov Noise
 function [noisy_I] = Markov(I, epsilon_percent_span)
