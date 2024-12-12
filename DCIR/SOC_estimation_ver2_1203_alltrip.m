@@ -1,7 +1,7 @@
 clc; clear; close all;
 
 %% Seed Setting
-rng(13);
+rng(198);
 
 %% Font Size Settings
 axisFontSize = 14;
@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.3;
+epsilon_percent_span = 0.2;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -60,29 +60,29 @@ Pcov1_init = [soc_cov 0;
             0   V_cov ]; 
 Pcov2_init = [ 2 *  soc_cov 0        0;
             0   V_cov/4  0;
-            0   0      V_cov/4]; % [SOC; V1; V2] % State covariance
+            0   0      V_cov/4]; % [SOC; V1; V2]
 
-Pcov3_init = zeros(1 + num_RC); % Initialize P3_init
-Pcov3_init(1,1) = 30 * soc_cov;    % Initial covariance for SOC
+Pcov3_init = zeros(1 + num_RC);
+Pcov3_init(1,1) = soc_cov;    
 for i = 2:(1 + num_RC)
-    Pcov3_init(i,i) = V_cov/201^2; % Initial covariance for each V_i
+    Pcov3_init(i,i) = V_cov/201^2; 
 end
 
 % Q
 Qcov1 = [soc_cov 0;
-      0  V_cov ];  % [SOC ; V1] % Process covariance
+      0  V_cov ];  
 
 Qcov2 = [ 2 * soc_cov    0        0;
              0     V_cov/4     0;
-             0      0     V_cov/4 ]; % [SOC; V1; V2] % Process covariance
+             0      0     V_cov/4 ]; 
 
-Qcov3 = zeros(1 + num_RC); % Initialize Q3
-Qcov3(1,1) =  30 * soc_cov; % Process noise for SOC
+Qcov3 = zeros(1 + num_RC);
+Qcov3(1,1) =  soc_cov; 
 for i = 2:(1 + num_RC)
-    Qcov3(i,i) = V_cov/201^2;% Process noise for each V_i
+    Qcov3(i,i) = V_cov/201^2;
 end
 
-% R , Measurement covariance
+% R
 Rcov1 = 5.25e-6;
 Rcov2 = 5.25e-6;
 Rcov3 = 5.25e-6;
@@ -106,7 +106,7 @@ initial_P_estimate_1RC = Pcov1_init;
 initial_SOC_estimate_1RC = initial_SOC_cc;
 initial_V1_estimate_1RC = 0;
 
-% Initialize data over all trips for 1RC
+% Data for 1RC
 t_all = [];
 True_SOC_all = [];
 CC_SOC_all = [];
@@ -116,6 +116,7 @@ KG_1RC_all_trips = [];
 residual_1RC_all_trips = [];
 I_all = [];
 noisy_I_all = [];
+states_all = []; 
 
 % Initialize SOC,V1,V2,P for 2RC model
 initial_P_estimate_2RC = Pcov2_init;
@@ -123,7 +124,6 @@ initial_SOC_estimate_2RC = initial_SOC_cc;
 initial_V1_estimate_2RC = 0;
 initial_V2_estimate_2RC = 0;
 
-% Initialize data over all trips for 2RC
 x_pred_2RC_all_trips = [];
 x_estimate_2RC_all_trips = [];
 KG_2RC_all_trips = [];
@@ -134,42 +134,40 @@ initial_P_estimate_DRT = Pcov3_init;
 initial_SOC_estimate_DRT = initial_SOC_cc;
 initial_V_estimate_DRT = zeros(num_RC, 1);
 
-% Initialize data over all trips for DRT
 x_pred_DRT_all_trips = [];
 x_estimate_DRT_all_trips = [];
 KG_DRT_all_trips = [];
 residual_DRT_all_trips = [];
 
-% Initialize previous trip's end time
 previous_trip_end_time = 0;
 
-for s = 1:num_trips-1 % For each trip
+initial_markov_state = 50; 
+
+for s = 1:num_trips-16
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
-    % Use Time_duration as time vector
     t = udds_data(s).Time_duration;
     I = udds_data(s).I;
     V = udds_data(s).V;
 
-    % Calculate dt
     if s == 1
-        dt = [t(1); diff(t)];      % First trip: prepend t(1)
-        dt(1) = dt(2);             % Set dt(1) equal to dt(2)
+        dt = [t(1); diff(t)];
+        dt(1) = dt(2);
     else
-        dt = [t(1) - previous_trip_end_time; diff(t)]; % For other trips
+        dt = [t(1) - previous_trip_end_time; diff(t)];
     end
 
     fprintf('Trip %d, dt(1): %f\n', s, dt(1));
 
-    [noisy_I] = Markov(I, epsilon_percent_span); % Current: Markov noise
-    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); % Voltage: Gaussian noise
+    [noisy_I, states, final_markov_state, P] = Markov(I, epsilon_percent_span, initial_markov_state); 
+    initial_markov_state = final_markov_state;
 
-    % Compute True SOC and CC SOC
+    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); 
+
     True_SOC = initial_SOC_true + cumtrapz(t - t(1), I)/(3600 * Q_batt);
     CC_SOC = initial_SOC_cc + cumtrapz(t - t(1), noisy_I)/(3600 * Q_batt);
 
     % 1-RC 
-
     SOC_est_1RC = zeros(length(t), 1);
     V1_est_1RC = zeros(length(t), 1);   
 
@@ -177,14 +175,12 @@ for s = 1:num_trips-1 % For each trip
     P_estimate_1RC = initial_P_estimate_1RC;
     V1_estimate_1RC = initial_V1_estimate_1RC;
 
-    % Kalman filter variables for 1RC
-    x_pred_1RC_all = zeros(length(t), 2);     % Predicted states
-    KG_1RC_all = zeros(length(t), 2);         % Kalman gains
-    residual_1RC_all = zeros(length(t), 1);   % Residuals
-    x_estimate_1RC_all = zeros(length(t), 2); % Updated states
+    x_pred_1RC_all = zeros(length(t), 2);     
+    KG_1RC_all = zeros(length(t), 2);         
+    residual_1RC_all = zeros(length(t), 1);   
+    x_estimate_1RC_all = zeros(length(t), 2);
 
     % 2-RC
-
     SOC_est_2RC = zeros(length(t), 1);
     V1_est_2RC = zeros(length(t), 1);
     V2_est_2RC = zeros(length(t), 1);
@@ -194,40 +190,35 @@ for s = 1:num_trips-1 % For each trip
     V2_estimate_2RC = initial_V2_estimate_2RC;
     P_estimate_2RC = initial_P_estimate_2RC;
 
-    % Kalman filter variables for 2RC
-    x_pred_2RC_all = zeros(length(t), 3);     % Predicted states
-    x_estimate_2RC_all = zeros(length(t), 3); % Updated states
-    KG_2RC_all = zeros(length(t), 3);         % Kalman gains
-    residual_2RC_all = zeros(length(t), 1);   % Residuals
+    x_pred_2RC_all = zeros(length(t), 3);
+    x_estimate_2RC_all = zeros(length(t), 3);
+    KG_2RC_all = zeros(length(t), 3);
+    residual_2RC_all = zeros(length(t), 1);
 
     % DRT
-
-    gamma = gamma_est_all(s,:); % 1x201
-    delta_theta = theta_discrete(2) - theta_discrete(1); % 0.0476
-    R_i = gamma * delta_theta; % 1x201
-    C_i = tau_discrete' ./ R_i; % 201x1
+    gamma = gamma_est_all(s,:); 
+    delta_theta = theta_discrete(2) - theta_discrete(1); 
+    R_i = gamma * delta_theta; 
+    C_i = tau_discrete' ./ R_i;
 
     SOC_est_DRT = zeros(length(t),1);
     V_est_DRT = zeros(length(t), num_RC);
 
     SOC_estimate_DRT = initial_SOC_estimate_DRT;
-    V_estimate_DRT = initial_V_estimate_DRT; % 201x1
+    V_estimate_DRT = initial_V_estimate_DRT;
     P_estimate_DRT = initial_P_estimate_DRT;
 
-    % Kalman filter variables for DRT
     x_pred_DRT_all = zeros(length(t), 1 + num_RC); 
     x_estimate_DRT_all = zeros(length(t), 1 + num_RC); 
     KG_DRT_all = zeros(length(t), 1 + num_RC);
     residual_DRT_all = zeros(length(t), 1);
 
-    for k = 1:length(t) % For each time step
-
+    for k = 1:length(t)
         %% 1RC
         R0 = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
         R1 = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
         C1 = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
 
-        %% Predict Step for 1RC
         if k == 1
             if s == 1
                 V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
@@ -258,7 +249,6 @@ for s = 1:num_trips-1 % For each trip
         KG = (P_pred_1RC * H') / S_k;
         KG_1RC_all(k, :) = KG';
 
-        %% Update Step for 1RC
         z = noisy_V(k);
         residual = z - V_pred_total;
         residual_1RC_all(k) = residual;
@@ -274,7 +264,6 @@ for s = 1:num_trips-1 % For each trip
 
         SOC_est_1RC(k) = x_estimate(1);
         V1_est_1RC(k) = x_estimate(2);
-
 
         %% 2RC
         R0 = interp1(SOC_params, R0_params, SOC_estimate_2RC, 'linear', 'extrap');
@@ -335,7 +324,6 @@ for s = 1:num_trips-1 % For each trip
         V1_est_2RC(k) = x_estimate(2);
         V2_est_2RC(k) = x_estimate(3);
 
-
         %% DRT
         SOC_pred_DRT = SOC_estimate_DRT + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
 
@@ -351,7 +339,8 @@ for s = 1:num_trips-1 % For each trip
 
         V_pred_DRT = zeros(num_RC, 1);
         for i = 1:num_RC
-            V_pred_DRT(i) = V_prev_DRT(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
+            V_pred_DRT(i) = V_prev_DRT(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + ...
+                            noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
         end
 
         x_pred = [SOC_pred_DRT; V_pred_DRT];
@@ -418,6 +407,7 @@ for s = 1:num_trips-1 % For each trip
     residual_1RC_all_trips = [residual_1RC_all_trips; residual_1RC_all];
     I_all = [I_all; I];
     noisy_I_all = [noisy_I_all; noisy_I];
+    states_all = [states_all; states]; 
 
     x_pred_2RC_all_trips = [x_pred_2RC_all_trips; x_pred_2RC_all];
     x_estimate_2RC_all_trips = [x_estimate_2RC_all_trips; x_estimate_2RC_all];
@@ -431,16 +421,13 @@ for s = 1:num_trips-1 % For each trip
 
 end
 
-%% Plotting for 1RC Model
+%% Plotting and RMSE
 
-% 컬러 정의 (RGB)
-color_true = [0, 0, 0];                % Black
-color_cc   = [0,0.4470,0.7410];        % Blue tone
-color_1rc  = [0.8350,0.3333,0.0000];   % Orange tone
-color_2rc  = [0.9020,0.6235,0.0000];   % Gold tone
-color_drt  = [0.8,0.4745,0.6549];      % Purple tone
-
-
+color_true = [0, 0, 0];                
+color_cc   = [0,0.4470,0.7410];        
+color_1rc  = [0.8350,0.3333,0.0000];   
+color_2rc  = [0.9020,0.6235,0.0000];   
+color_drt  = [0.8,0.4745,0.6549];
 
 figure('Name', '1RC Model Results');
 subplot(4,1,1);
@@ -479,7 +466,6 @@ ylabel('Residual');
 title('Residual over Time (1RC)');
 legend('show', 'Location', 'best');
 
-%% Plotting for 2RC Model
 figure('Name', '2RC Model Results');
 subplot(4,1,1);
 hold on;
@@ -517,7 +503,6 @@ xlabel('Time [s]');
 title('Kalman Gain and Residual over Time (2RC)');
 legend('show', 'Location', 'best');
 
-%% Plotting for DRT Model
 figure('Name', 'DRT Model Results');
 subplot(4,1,1);
 hold on;
@@ -555,7 +540,6 @@ ylabel('Residual');
 title('Residual over Time (DRT)');
 legend('show', 'Location', 'best');
 
-%% SOC Comparison Plot
 figure('Name', 'SOC Comparison Across Models');
 plot(t_all, True_SOC_all, 'Color', color_true, 'LineWidth', 1.5, 'DisplayName', 'True SOC');
 hold on;
@@ -569,7 +553,6 @@ title('SOC Comparison Across Models');
 legend('show', 'Location', 'best');
 hold off;
 
-%% SOC Error Comparison
 figure('Name', 'SOC Error Comparison');
 plot(t_all, x_estimate_1RC_all_trips(:,1) - True_SOC_all, 'Color', color_1rc, 'LineWidth', 1.5, 'DisplayName', '1RC-KF SOC Error');
 hold on;
@@ -582,14 +565,12 @@ title('SOC Error Comparison');
 legend('show', 'Location', 'best');
 hold off;
 
-% Current Noise 
 figure;
 plot(t_all, I_all - noisy_I_all, 'LineWidth', 1.5);
 xlabel('Time [s]');
 ylabel('Noise');
 title('Current Noise (I - noisy\_I)');
 
-% dOCV/dSOC 
 figure;
 plot(unique_soc, dOCV_dSOC_values_smooth, 'LineWidth', 1.5);
 xlabel('SOC');
@@ -597,7 +578,13 @@ ylabel('dOCV/dSOC');
 title('Derivative of OCV with respect to SOC');
 grid on;
 
-%% Compute and Display RMSE
+figure('Name', 'Markov States Evolution');
+plot(t_all, states_all, 'LineWidth', 1.5);
+xlabel('Time [s]');
+ylabel('State Index');
+title('Markov State Evolution Over Time');
+grid on;
+
 rmse_True_1RC = sqrt(mean((x_estimate_1RC_all_trips(:,1) - True_SOC_all).^2));
 rmse_True_2RC = sqrt(mean((x_estimate_2RC_all_trips(:,1) - True_SOC_all).^2));
 rmse_True_DRT = sqrt(mean((x_estimate_DRT_all_trips(:,1) - True_SOC_all).^2));
@@ -610,41 +597,31 @@ fprintf("2RC RMSE: %.6f\n", rmse_True_2RC);
 fprintf("DRT RMSE: %.6f\n", rmse_True_DRT);
 
 %% Function for Adding Markov Noise
-function [noisy_I] = Markov(I, epsilon_percent_span)
+function [noisy_I, states, final_state ,P] = Markov(I, epsilon_percent_span, initial_state)
+    sigma_percent = 0.001;      
+    N = 101; 
+    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); 
+    sigma = sigma_percent;
 
-    % Define noise parameters
-    sigma_percent = 0.001;      % Standard deviation in percentage (adjust as needed)
-
-    N = 51; % Number of states
-    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -noise_percent/2 to +noise_percent/2
-    sigma = sigma_percent; % Standard deviation
-
-    % Initialize transition probability matrix P
     P = zeros(N);
     for i = 1:N
         probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
-        P(i, :) = probabilities / sum(probabilities); % Normalize to sum to 1
+        P(i, :) = probabilities / sum(probabilities); 
     end
 
-    % Initialize state tracking
-    initial_state = 48; 
     current_state = initial_state;
 
-    % Initialize output variables
     noisy_I = zeros(size(I));
-    states = zeros(size(I)); % Vector to store states
+    states = zeros(size(I));
     epsilon = zeros(size(I));
 
-    % Generate noisy current and track states
     for k = 1:length(I)
         epsilon(k) = epsilon_vector(current_state);
-        noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); % Apply the epsilon percentage
-
-        states(k) = current_state; % Store the current state
-
-        % Transition to the next state based on probabilities
+        noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); 
+        states(k) = current_state; 
         current_state = randsample(1:N, 1, true, P(current_state, :));
     end
 
+    final_state = states(end);
 end
 
