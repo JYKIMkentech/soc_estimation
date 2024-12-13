@@ -51,7 +51,7 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 %% 1204 covariance 설정
 
 Voltage_cov = logspace(-4,-10,5);
-SOC_cov = [1e-13, 1e-14];
+%SOC_cov = [1e-13, 1e-14];
 
 soc_cov = 1e-14;
 V_cov = Voltage_cov(5);
