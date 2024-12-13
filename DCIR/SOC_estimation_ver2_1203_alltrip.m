@@ -1,7 +1,6 @@
 clc; clear; close all;
 
 %% Seed Setting
-rng(13);
 rng(198);
 
 %% Font Size Settings
@@ -35,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 0.15;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
