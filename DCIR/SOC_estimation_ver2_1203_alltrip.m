@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 0.15;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -58,7 +58,7 @@ num_RC = length(tau_discrete);
 % P
 Pcov1_init = [soc_cov 0;  
             0   V_cov ]; 
-Pcov2_init = [ 2 *  soc_cov 0        0;
+Pcov2_init = [ soc_cov 0        0;
             0   V_cov/4  0;
             0   0      V_cov/4]; % [SOC; V1; V2]
 
@@ -72,7 +72,7 @@ end
 Qcov1 = [soc_cov 0;
       0  V_cov ];  
 
-Qcov2 = [ 2 * soc_cov    0        0;
+Qcov2 = [ soc_cov    0        0;
              0     V_cov/4     0;
              0      0     V_cov/4 ]; 
 
@@ -143,7 +143,7 @@ previous_trip_end_time = 0;
 
 initial_markov_state = 50; 
 
-for s = 1:num_trips-16
+for s = 1:num_trips-1 
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     t = udds_data(s).Time_duration;
@@ -215,18 +215,18 @@ for s = 1:num_trips-16
 
     for k = 1:length(t)
         %% 1RC
-        R0 = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
-        R1 = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
-        C1 = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
+        R0_1RC = interp1(SOC_params, R0_params, SOC_estimate_1RC, 'linear', 'extrap');
+        R1_1RC = interp1(SOC_params, R1_params, SOC_estimate_1RC, 'linear', 'extrap');
+        C1_1RC = interp1(SOC_params, C1_params, SOC_estimate_1RC, 'linear', 'extrap');
 
         if k == 1
             if s == 1
-                V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+                V1_pred = noisy_I(k) * R1_1RC * (1 - exp(-dt(k) / (R1_1RC * C1_1RC)));
             else
-                V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+                V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1_1RC * C1_1RC)) + noisy_I(k) * R1_1RC * (1 - exp(-dt(k) / (R1_1RC * C1_1RC)));
             end
         else 
-            V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
+            V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1_1RC * C1_1RC)) + noisy_I(k) * R1_1RC * (1 - exp(-dt(k) / (R1_1RC * C1_1RC)));
         end
 
         SOC_pred_1RC = SOC_estimate_1RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
@@ -235,7 +235,7 @@ for s = 1:num_trips-16
         x_pred_1RC_all(k, :) = x_pred';
 
         A = [1 0;
-             0 exp(-dt(k) / (R1 * C1))];
+             0 exp(-dt(k) / (R1_1RC * C1_1RC))];
         P_pred_1RC = A * P_estimate_1RC * A' + Qcov1;
 
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred_1RC, 'linear', 'extrap');
@@ -243,7 +243,7 @@ for s = 1:num_trips-16
 
         H = [dOCV_dSOC, 1];
 
-        V_pred_total = OCV_pred + V1_pred + R0 * noisy_I(k);
+        V_pred_total = OCV_pred + V1_pred + R0_1RC * noisy_I(k);
 
         S_k = H * P_pred_1RC * H' + Rcov1;
         KG = (P_pred_1RC * H') / S_k;
@@ -266,23 +266,23 @@ for s = 1:num_trips-16
         V1_est_1RC(k) = x_estimate(2);
 
         %% 2RC
-        R0 = interp1(SOC_params, R0_params, SOC_estimate_2RC, 'linear', 'extrap');
-        R1 = interp1(SOC_params, R1_params, SOC_estimate_2RC, 'linear', 'extrap');
-        C1 = interp1(SOC_params, C1_params, SOC_estimate_2RC, 'linear', 'extrap');
-        R2 = interp1(SOC_params, R2_params, SOC_estimate_2RC, 'linear', 'extrap');
-        C2 = interp1(SOC_params, C2_params, SOC_estimate_2RC, 'linear', 'extrap');
+        R0_2RC = interp1(SOC_params, R0_params, SOC_estimate_2RC, 'linear', 'extrap');
+        R1_2RC = interp1(SOC_params, R1_params, SOC_estimate_2RC, 'linear', 'extrap');
+        C1_2RC = interp1(SOC_params, C1_params, SOC_estimate_2RC, 'linear', 'extrap');
+        R2_2RC = interp1(SOC_params, R2_params, SOC_estimate_2RC, 'linear', 'extrap');
+        C2_2RC = interp1(SOC_params, C2_params, SOC_estimate_2RC, 'linear', 'extrap');
 
         if k == 1
             if s == 1
-                V1_pred = noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
-                V2_pred = noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
+                V1_pred = noisy_I(k) * R1_2RC * (1 - exp(-dt(k) / (R1_2RC * C1_2RC)));
+                V2_pred = noisy_I(k) * R2_2RC * (1 - exp(-dt(k) / (R2_2RC * C2_2RC)));
             else
                 V1_pred = V1_estimate_2RC;
                 V2_pred = V2_estimate_2RC;
             end
         else
-            V1_pred = V1_estimate_2RC * exp(-dt(k) / (R1 * C1)) + noisy_I(k) * R1 * (1 - exp(-dt(k) / (R1 * C1)));
-            V2_pred = V2_estimate_2RC * exp(-dt(k) / (R2 * C2)) + noisy_I(k) * R2 * (1 - exp(-dt(k) / (R2 * C2)));
+            V1_pred = V1_estimate_2RC * exp(-dt(k) / (R1_2RC * C1_2RC)) + noisy_I(k) * R1_2RC * (1 - exp(-dt(k) / (R1_2RC * C1_2RC)));
+            V2_pred = V2_estimate_2RC * exp(-dt(k) / (R2_2RC * C2_2RC)) + noisy_I(k) * R2_2RC * (1 - exp(-dt(k) / (R2_2RC * C2_2RC)));
         end
 
         SOC_pred_2RC = SOC_estimate_2RC + (dt(k) / (Q_batt * 3600)) * noisy_I(k);
@@ -291,8 +291,8 @@ for s = 1:num_trips-16
         x_pred_2RC_all(k, :) = x_pred';
 
         A = [1 0 0;
-             0 exp(-dt(k) / (R1 * C1)) 0;
-             0 0 exp(-dt(k) / (R2 * C2))];
+             0 exp(-dt(k) / (R1_2RC * C1_2RC)) 0;
+             0 0 exp(-dt(k) / (R2_2RC * C2_2RC))];
         P_pred_2RC = A * P_estimate_2RC * A' + Qcov2;
 
         OCV_pred = interp1(unique_soc, unique_ocv, SOC_pred_2RC, 'linear', 'extrap');
@@ -300,7 +300,7 @@ for s = 1:num_trips-16
 
         H = [dOCV_dSOC, 1, 1];
 
-        V_pred_total = OCV_pred + V1_pred + V2_pred + R0 * noisy_I(k);
+        V_pred_total = OCV_pred + V1_pred + V2_pred + R0_2RC * noisy_I(k);
 
         S_k = H * P_pred_2RC * H' + Rcov2;
         KG = (P_pred_2RC * H') / S_k;
@@ -353,8 +353,8 @@ for s = 1:num_trips-16
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred_DRT, 'linear', 'extrap');
 
         H_DRT = [dOCV_dSOC, ones(1, num_RC)];
-
-        V_pred_total_DRT = OCV_pred + sum(V_pred_DRT) + R0 * noisy_I(k);
+        
+        V_pred_total_DRT = OCV_pred + sum(V_pred_DRT) + R0_est_all(s,1) * noisy_I(k);
 
         S_k_DRT = H_DRT * P_pred_DRT * H_DRT' + Rcov3;
         KG_DRT = (P_pred_DRT * H_DRT') / S_k_DRT;
@@ -582,7 +582,7 @@ figure('Name', 'Markov States Evolution');
 plot(t_all, states_all, 'LineWidth', 1.5);
 xlabel('Time [s]');
 ylabel('State Index');
-title('Markov State Evolution Over Time');
+title('Markov State ');
 grid on;
 
 rmse_True_1RC = sqrt(mean((x_estimate_1RC_all_trips(:,1) - True_SOC_all).^2));
