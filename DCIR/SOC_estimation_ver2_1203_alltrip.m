@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.15;
+epsilon_percent_span = 0.2;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -48,19 +48,12 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 %% 2. Kalman Filter Settings
 
-<<<<<<< HEAD
 %% 1204 covariance 설정
 
-Voltage_cov = logspace(-4,-10,5);
 %SOC_cov = [1e-13, 1e-14];
-
-soc_cov = 1e-14;
-V_cov = Voltage_cov(5);
-=======
-Voltage_cov = logspace(-15,-20,6);
-soc_cov = 1e-15;
-V_cov = Voltage_cov(2);
->>>>>>> ef109bbd8b15f4aa0b91754330c6b57eed1805ef
+Voltage_cov = logspace(-10,-20,11);
+soc_cov = 1e-13;
+V_cov = 1e-16; % Voltage_cov(2);
 
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
@@ -153,7 +146,7 @@ previous_trip_end_time = 0;
 
 initial_markov_state = 50; 
 
-for s = 1:num_trips-1 
+for s = 1:num_trips-16 
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
     
     t = udds_data(s).Time_duration;
