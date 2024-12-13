@@ -1,0 +1,53 @@
+clc;clear;close all;
+
+epsilon_percent_span = 0.2;
+
+load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
+
+I = udds_data(1).I;
+t = udds_data(1).t;
+
+sigma_percent = 0.001;      % Standard deviation in percentage (adjust as needed)
+N = 51; 
+epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % From -noise_percent/2 to +noise_percent/2
+sigma = sigma_percent; % Standard deviation
+
+% Initialize transition probability matrix P
+P = zeros(N);
+for i = 1:N
+    probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
+    P(i, :) = probabilities / sum(probabilities); % Normalize to sum to 1
+end
+
+% Initialize state tracking
+initial_state = 26; %randi(N); 
+current_state = initial_state;
+
+% Initialize output variables
+noisy_I = zeros(size(I));
+states = zeros(size(I)); % Vector to store states
+epsilon = zeros(size(I));
+
+% Generate noisy current and track states
+for k = 1:length(I)
+    epsilon(k) = epsilon_vector(current_state);
+    noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); % Apply the epsilon percentage
+
+    states(k) = current_state; % Store the current state
+
+    % Transition to the next state based on probabilities
+    current_state = randsample(1:N, 1, true, P(current_state, :));
+end
+
+figure(1)
+plot(t,epsilon);
+xlabel('time')
+ylabel('epsilon')
+
+figure(2)
+plot(t,I - noisy_I)
+xlabel()
+
+figure(3)
+plot(t,states);
+    
