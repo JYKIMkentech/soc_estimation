@@ -51,7 +51,7 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 %% 1204 covariance 설정
 
 Voltage_cov = logspace(-4,-20,17);
-soc_cov = 1e-12 ;
+soc_cov = 1e-8 ;
 V_cov = 1e-22 ; %Voltage_cov(1);
 
 % Number of RC elements for DRT model
