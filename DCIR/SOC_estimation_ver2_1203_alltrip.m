@@ -51,14 +51,14 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 %% 1204 covariance 설정
 
 Voltage_cov = logspace(-4,-20,17);
-soc_cov = 1e-12 ;
-V_cov = 1e-22 ; %Voltage_cov(1);
+soc_cov = 1e-11 ;
+V_cov = 1e-8; %Voltage_cov(1);
 
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [soc_cov 0;  
+Pcov1_init = [ soc_cov 0;  
             0   V_cov ]; 
 Pcov2_init = [ soc_cov 0        0;
             0   V_cov/4  0;
@@ -71,7 +71,7 @@ for i = 2:(1 + num_RC)
 end
 
 % Q
-Qcov1 = [soc_cov 0;
+Qcov1 = [ soc_cov 0;
       0  V_cov ];  
 
 Qcov2 = [ soc_cov    0        0;
@@ -248,21 +248,21 @@ for s = 1:num_trips-16
         V_pred_total = OCV_pred + V1_pred + R0_1RC * noisy_I(k);
 
         S_k = H * P_pred_1RC * H' + Rcov1;
-        KG = (P_pred_1RC * H') / S_k;
-        KG_1RC_all(k, :) = KG';
+        KG_1RC = (P_pred_1RC * H') / S_k;
+        KG_1RC_all(k, :) = KG_1RC';
 
         z = noisy_V(k);
         residual = z - V_pred_total;
         residual_1RC_all(k) = residual;
 
-        x_estimate = x_pred + KG * residual;
+        x_estimate = x_pred + KG_1RC * residual;
 
         SOC_estimate_1RC = x_estimate(1);
         V1_estimate_1RC = x_estimate(2);
 
         x_estimate_1RC_all(k, :) = x_estimate';
 
-        P_estimate_1RC = (eye(2) - KG * H) * P_pred_1RC;
+        P_estimate_1RC = (eye(2) - KG_1RC * H) * P_pred_1RC;
 
         SOC_est_1RC(k) = x_estimate(1);
         V1_est_1RC(k) = x_estimate(2);
@@ -305,14 +305,14 @@ for s = 1:num_trips-16
         V_pred_total = OCV_pred + V1_pred + V2_pred + R0_2RC * noisy_I(k);
 
         S_k = H * P_pred_2RC * H' + Rcov2;
-        KG = (P_pred_2RC * H') / S_k;
-        KG_2RC_all(k, :) = KG';
+        KG_2RC = (P_pred_2RC * H') / S_k;
+        KG_2RC_all(k, :) = KG_2RC';
 
         z = noisy_V(k);
         residual = z - V_pred_total;
         residual_2RC_all(k) = residual;
 
-        x_estimate = x_pred + KG * residual;
+        x_estimate = x_pred + KG_2RC * residual;
 
         SOC_estimate_2RC = x_estimate(1);
         V1_estimate_2RC = x_estimate(2);
@@ -320,7 +320,7 @@ for s = 1:num_trips-16
 
         x_estimate_2RC_all(k, :) = x_estimate';
 
-        P_estimate_2RC = (eye(3) - KG * H) * P_pred_2RC;
+        P_estimate_2RC = (eye(3) - KG_2RC * H) * P_pred_2RC;
 
         SOC_est_2RC(k) = x_estimate(1);
         V1_est_2RC(k) = x_estimate(2);
