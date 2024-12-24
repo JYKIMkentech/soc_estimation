@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 0.2;
+epsilon_percent_span = 4;
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -51,16 +51,16 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 %% 1204 covariance 설정
 
 Voltage_cov = logspace(-4,-20,17);
-soc_cov = 1e-11 ;
+soc_cov = 1e-12 ;
 V_cov = 1e-8; %Voltage_cov(1);
 
 % Number of RC elements for DRT model
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [ soc_cov 0;  
+Pcov1_init = [ soc_cov/50 0;  
             0   V_cov ]; 
-Pcov2_init = [ soc_cov 0        0;
+Pcov2_init = [ soc_cov/5 0        0;
             0   V_cov/4  0;
             0   0      V_cov/4]; % [SOC; V1; V2]
 
@@ -71,10 +71,10 @@ for i = 2:(1 + num_RC)
 end
 
 % Q
-Qcov1 = [ soc_cov 0;
+Qcov1 = [ soc_cov/50 0;
       0  V_cov ];  
 
-Qcov2 = [ soc_cov    0        0;
+Qcov2 = [ soc_cov/5    0        0;
              0     V_cov/4     0;
              0      0     V_cov/4 ]; 
 
@@ -600,7 +600,7 @@ fprintf("DRT RMSE: %.6f\n", rmse_True_DRT);
 
 %% Function for Adding Markov Noise
 function [noisy_I, states, final_state ,P] = Markov(I, epsilon_percent_span, initial_state)
-    sigma_percent = 0.001;      
+    sigma_percent = 0.1;      
     N = 101; 
     epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); 
     sigma = sigma_percent;
