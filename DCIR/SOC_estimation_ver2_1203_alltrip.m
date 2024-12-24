@@ -34,7 +34,7 @@ load('udds_data.mat'); % Struct array 'udds_data' containing fields V, I, t, Tim
 Q_batt = 2.7742 ; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
-epsilon_percent_span = 4;
+epsilon_percent_span = 4; % 0.02 --> 4
 voltage_noise_percent = 0.01;
 
 [unique_ocv, b] = unique(ocv_values);
@@ -600,7 +600,7 @@ fprintf("DRT RMSE: %.6f\n", rmse_True_DRT);
 
 %% Function for Adding Markov Noise
 function [noisy_I, states, final_state ,P] = Markov(I, epsilon_percent_span, initial_state)
-    sigma_percent = 0.1;      
+    sigma_percent = 0.1;    % 0.001 --> 0.1   
     N = 101; 
     epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); 
     sigma = sigma_percent;
