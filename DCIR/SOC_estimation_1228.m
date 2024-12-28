@@ -10,7 +10,7 @@ legendFontSize = 12;
 labelFontSize = 14;
 
 %% Define Color Matrix
-c_mat = lines(9);  
+c_mat = lines(9);
 
 %% 1. Data Load
 
@@ -42,7 +42,7 @@ unique_soc = soc_values(b);
 
 % Compute the derivative of OCV with respect to SOC
 dOCV_dSOC_values = gradient(unique_ocv) ./ gradient(unique_soc);
-windowSize = 10; 
+windowSize = 10;
 dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 
 
@@ -58,28 +58,28 @@ V_cov = 1e-8; %Voltage_cov(1);
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [ soc_cov 0;  
-            0   V_cov ]; 
+Pcov1_init = [ soc_cov 0;
+               0       V_cov ];
 Pcov2_init = [ soc_cov 0       0;
-            0   V_cov/4  0;
-            0   0      V_cov/4]; % [SOC; V1; V2]
+               0       V_cov/4  0;
+               0       0        V_cov/4 ]; % [SOC; V1; V2]
 
 Pcov3_init = zeros(1 + num_RC);
-Pcov3_init(1,1) = soc_cov;    
+Pcov3_init(1,1) = soc_cov;
 for i = 2:(1 + num_RC)
-    Pcov3_init(i,i) = V_cov/201^2; 
+    Pcov3_init(i,i) = V_cov/201^2;
 end
 
 % Q
 Qcov1 = [ soc_cov 0;
-      0  V_cov ];  
+          0      V_cov ];
 
-Qcov2 = [ soc_cov    0        0;
-             0     V_cov/4     0;
-             0      0     V_cov/4 ]; 
+Qcov2 = [ soc_cov    0         0;
+          0         V_cov/4    0;
+          0         0          V_cov/4 ];
 
 Qcov3 = zeros(1 + num_RC);
-Qcov3(1,1) =  soc_cov; 
+Qcov3(1,1) =  soc_cov;
 for i = 2:(1 + num_RC)
     Qcov3(i,i) = V_cov/201^2;
 end
@@ -118,7 +118,7 @@ KG_1RC_all_trips = [];
 residual_1RC_all_trips = [];
 I_all = [];
 noisy_I_all = [];
-states_all = []; 
+states_all = [];
 
 % Initialize SOC,V1,V2,P for 2RC model
 initial_P_estimate_2RC = Pcov2_init;
@@ -143,11 +143,11 @@ residual_DRT_all_trips = [];
 
 previous_trip_end_time = 0;
 
-initial_markov_state = 50; 
+initial_markov_state = 50;
 
-for s = 1:num_trips-15 
+for s = 1:num_trips-15
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
-    
+
     t = udds_data(s).Time_duration;
     I = udds_data(s).I;
     V = udds_data(s).V;
@@ -161,25 +161,25 @@ for s = 1:num_trips-15
 
     fprintf('Trip %d, dt(1): %f\n', s, dt(1));
 
-    [noisy_I, states, final_markov_state, P] = Markov(I, epsilon_percent_span, initial_markov_state); 
+    [noisy_I, states, final_markov_state, P] = Markov(I, epsilon_percent_span, initial_markov_state);
     initial_markov_state = final_markov_state;
 
-    noisy_V = V + voltage_noise_percent * V .* randn(size(V)); 
+    noisy_V = V + voltage_noise_percent * V .* randn(size(V));
 
     True_SOC = initial_SOC_true + cumtrapz(t - t(1), I)/(3600 * Q_batt);
     CC_SOC = initial_SOC_cc + cumtrapz(t - t(1), noisy_I)/(3600 * Q_batt);
 
-    % 1-RC 
+    % 1-RC
     SOC_est_1RC = zeros(length(t), 1);
-    V1_est_1RC = zeros(length(t), 1);   
+    V1_est_1RC = zeros(length(t), 1);
 
     SOC_estimate_1RC = initial_SOC_estimate_1RC;
     P_estimate_1RC = initial_P_estimate_1RC;
     V1_estimate_1RC = initial_V1_estimate_1RC;
 
-    x_pred_1RC_all = zeros(length(t), 2);     
-    KG_1RC_all = zeros(length(t), 2);         
-    residual_1RC_all = zeros(length(t), 1);   
+    x_pred_1RC_all = zeros(length(t), 2);
+    KG_1RC_all = zeros(length(t), 2);
+    residual_1RC_all = zeros(length(t), 1);
     x_estimate_1RC_all = zeros(length(t), 2);
 
     % 2-RC
@@ -198,9 +198,9 @@ for s = 1:num_trips-15
     residual_2RC_all = zeros(length(t), 1);
 
     % DRT
-    gamma = gamma_est_all(s,:); 
-    delta_theta = theta_discrete(2) - theta_discrete(1); 
-    R_i = gamma * delta_theta; 
+    gamma = gamma_est_all(s,:);
+    delta_theta = theta_discrete(2) - theta_discrete(1);
+    R_i = gamma * delta_theta;
     C_i = tau_discrete' ./ R_i;
 
     SOC_est_DRT = zeros(length(t),1);
@@ -210,8 +210,8 @@ for s = 1:num_trips-15
     V_estimate_DRT = initial_V_estimate_DRT;
     P_estimate_DRT = initial_P_estimate_DRT;
 
-    x_pred_DRT_all = zeros(length(t), 1 + num_RC); 
-    x_estimate_DRT_all = zeros(length(t), 1 + num_RC); 
+    x_pred_DRT_all = zeros(length(t), 1 + num_RC);
+    x_estimate_DRT_all = zeros(length(t), 1 + num_RC);
     KG_DRT_all = zeros(length(t), 1 + num_RC);
     residual_DRT_all = zeros(length(t), 1);
 
@@ -227,7 +227,7 @@ for s = 1:num_trips-15
             else
                 V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1_1RC * C1_1RC)) + noisy_I(k) * R1_1RC * (1 - exp(-dt(k) / (R1_1RC * C1_1RC)));
             end
-        else 
+        else
             V1_pred = V1_estimate_1RC * exp(-dt(k) / (R1_1RC * C1_1RC)) + noisy_I(k) * R1_1RC * (1 - exp(-dt(k) / (R1_1RC * C1_1RC)));
         end
 
@@ -342,7 +342,7 @@ for s = 1:num_trips-15
         V_pred_DRT = zeros(num_RC, 1);
         for i = 1:num_RC
             V_pred_DRT(i) = V_prev_DRT(i) * exp(-dt(k) / (R_i(i) * C_i(i))) + ...
-                            noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
+                noisy_I(k) * R_i(i) * (1 - exp(-dt(k) / (R_i(i) * C_i(i))));
         end
 
         x_pred = [SOC_pred_DRT; V_pred_DRT];
@@ -355,7 +355,7 @@ for s = 1:num_trips-15
         dOCV_dSOC = interp1(unique_soc, dOCV_dSOC_values_smooth, SOC_pred_DRT, 'linear', 'extrap');
 
         H_DRT = [dOCV_dSOC, ones(1, num_RC)];
-        
+
         V_pred_total_DRT = OCV_pred + sum(V_pred_DRT) + R0_est_all(s,1) * noisy_I(k);
 
         S_k_DRT = H_DRT * P_pred_DRT * H_DRT' + Rcov3;
@@ -377,7 +377,6 @@ for s = 1:num_trips-15
 
         SOC_est_DRT(k) = SOC_estimate_DRT;
         V_est_DRT(k,:) = V_estimate_DRT';
-
     end
 
     % Update initial values for the next trip
@@ -409,7 +408,7 @@ for s = 1:num_trips-15
     residual_1RC_all_trips = [residual_1RC_all_trips; residual_1RC_all];
     I_all = [I_all; I];
     noisy_I_all = [noisy_I_all; noisy_I];
-    states_all = [states_all; states]; 
+    states_all = [states_all; states];
 
     x_pred_2RC_all_trips = [x_pred_2RC_all_trips; x_pred_2RC_all];
     x_estimate_2RC_all_trips = [x_estimate_2RC_all_trips; x_estimate_2RC_all];
@@ -425,10 +424,10 @@ end
 
 %% Plotting and RMSE
 
-color_true = [0, 0, 0];                
-color_cc   = [0,0.4470,0.7410];        
-color_1rc  = [0.8350,0.3333,0.0000];   
-color_2rc  = [0.9020,0.6235,0.0000];   
+color_true = [0, 0, 0];
+color_cc   = [0,0.4470,0.7410];
+color_1rc  = [0.8350,0.3333,0.0000];
+color_2rc  = [0.9020,0.6235,0.0000];
 color_drt  = [0.8,0.4745,0.6549];
 
 figure('Name', '1RC Model Results');
@@ -571,7 +570,7 @@ figure;
 plot(t_all, I_all - noisy_I_all, 'LineWidth', 1.5);
 xlabel('Time [s]');
 ylabel('Noise');
-title('Current Noise (I - noisy\_I)');
+title('Current Noise (I - noisy_I)');
 
 figure;
 plot(unique_soc, dOCV_dSOC_values_smooth, 'LineWidth', 1.5);
@@ -598,32 +597,132 @@ fprintf("1RC RMSE: %.6f\n", rmse_True_1RC);
 fprintf("2RC RMSE: %.6f\n", rmse_True_2RC);
 fprintf("DRT RMSE: %.6f\n", rmse_True_DRT);
 
+
+
+%%%%% ---------------------------------------------------------
+%%%%% Additional Figures to check the sign of Kalman Gains
+%%%%% ---------------------------------------------------------
+
+%% 1RC Model: SOC Prediction, Kalman Gain, Correction
+figure('Name','Kalman Filter Operation - 1RC');
+
+% -- Subplot(1): SOC (Pred, Est, True, CC) + Kalman Gain (SOC) --
+subplot(2,1,1);
+
+% Left y-axis for SOC
+yyaxis left;
+plot(t_all, x_pred_1RC_all_trips(:,1), 'b-', 'LineWidth',1.5, 'DisplayName','Predicted SOC (1RC)');
+hold on;
+plot(t_all, x_estimate_1RC_all_trips(:,1), 'r-', 'LineWidth',1.5, 'DisplayName','Estimated SOC (1RC)');
+plot(t_all, True_SOC_all, 'k--', 'LineWidth',1.5, 'DisplayName','True SOC');
+plot(t_all, CC_SOC_all, 'Color',[0 0.4470 0.7410],'LineWidth',1.5, 'DisplayName','CC SOC');
+hold off;
+ylabel('SOC');
+xlabel('Time [s]');
+title('SOC & Kalman Gain (1RC)');
+legend('show','Location','best');
+
+% Right y-axis for Kalman Gain
+yyaxis right;
+plot(t_all, KG_1RC_all_trips(:,1), 'm-', 'LineWidth',1.5, 'DisplayName','Kalman Gain (SOC)');
+ylabel('Kalman Gain');
+
+% -- Subplot(2): SOC Correction = (Estimated - Predicted) --
+subplot(2,1,2);
+plot(t_all, x_estimate_1RC_all_trips(:,1) - x_pred_1RC_all_trips(:,1), ...
+     'LineWidth',1.5, 'DisplayName','SOC Correction');
+title('SOC Correction (1RC)');
+xlabel('Time [s]');
+ylabel('SOC_{est} - SOC_{pred}');
+legend('show','Location','best');
+
+
+%% 2RC Model: SOC Prediction, Kalman Gain, Correction
+figure('Name','Kalman Filter Operation - 2RC');
+
+% -- Subplot(1): SOC (Pred, Est, True, CC) + Kalman Gain (SOC) --
+subplot(2,1,1);
+
+yyaxis left;
+plot(t_all, x_pred_2RC_all_trips(:,1), 'b-', 'LineWidth',1.5, 'DisplayName','Predicted SOC (2RC)');
+hold on;
+plot(t_all, x_estimate_2RC_all_trips(:,1), 'r-', 'LineWidth',1.5, 'DisplayName','Estimated SOC (2RC)');
+plot(t_all, True_SOC_all, 'k--', 'LineWidth',1.5, 'DisplayName','True SOC');
+plot(t_all, CC_SOC_all, 'Color',[0 0.4470 0.7410],'LineWidth',1.5, 'DisplayName','CC SOC');
+hold off;
+ylabel('SOC');
+xlabel('Time [s]');
+title('SOC & Kalman Gain (2RC)');
+legend('show','Location','best');
+
+yyaxis right;
+plot(t_all, KG_2RC_all_trips(:,1), 'm-', 'LineWidth',1.5, 'DisplayName','Kalman Gain (SOC)');
+ylabel('Kalman Gain');
+
+% -- Subplot(2): SOC Correction
+subplot(2,1,2);
+plot(t_all, x_estimate_2RC_all_trips(:,1) - x_pred_2RC_all_trips(:,1), ...
+     'LineWidth',1.5, 'DisplayName','SOC Correction');
+title('SOC Correction (2RC)');
+xlabel('Time [s]');
+ylabel('SOC_{est} - SOC_{pred}');
+legend('show','Location','best');
+
+
+%% DRT Model: SOC Prediction, Kalman Gain, Correction
+figure('Name','Kalman Filter Operation - DRT');
+
+% -- Subplot(1): SOC (Pred, Est, True, CC) + Kalman Gain (SOC) --
+subplot(2,1,1);
+
+yyaxis left;
+plot(t_all, x_pred_DRT_all_trips(:,1), 'b-', 'LineWidth',1.5, 'DisplayName','Predicted SOC (DRT)');
+hold on;
+plot(t_all, x_estimate_DRT_all_trips(:,1), 'r-', 'LineWidth',1.5, 'DisplayName','Estimated SOC (DRT)');
+plot(t_all, True_SOC_all, 'k--', 'LineWidth',1.5, 'DisplayName','True SOC');
+plot(t_all, CC_SOC_all, 'Color',[0 0.4470 0.7410],'LineWidth',1.5, 'DisplayName','CC SOC');
+hold off;
+ylabel('SOC');
+xlabel('Time [s]');
+title('SOC & Kalman Gain (DRT)');
+legend('show','Location','best');
+
+yyaxis right;
+plot(t_all, KG_DRT_all_trips(:,1), 'm-', 'LineWidth',1.5, 'DisplayName','Kalman Gain (SOC)');
+ylabel('Kalman Gain');
+
+% -- Subplot(2): SOC Correction
+subplot(2,1,2);
+plot(t_all, x_estimate_DRT_all_trips(:,1) - x_pred_DRT_all_trips(:,1), ...
+     'LineWidth',1.5, 'DisplayName','SOC Correction');
+title('SOC Correction (DRT)');
+xlabel('Time [s]');
+ylabel('SOC_{est} - SOC_{pred}');
+legend('show','Location','best');
 %% Function for Adding Markov Noise
-function [noisy_I, states, final_state ,P] = Markov(I, epsilon_percent_span, initial_state)
-    sigma_percent = 0.1;    % 0.001 --> 0.1   
-    N = 101; 
-    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % epsilon_percent_span : 0.02 --> 4 
+function [noisy_I, states, final_state, P] = Markov(I, epsilon_percent_span, initial_state)
+    sigma_percent = 0.1;    % 0.001 --> 0.1
+    N = 101;
+    epsilon_vector = linspace(-epsilon_percent_span/2, epsilon_percent_span/2, N); % epsilon_percent_span : 0.02 --> 4
     sigma = sigma_percent;
 
     P = zeros(N);
     for i = 1:N
-        probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma); 
-        P(i, :) = probabilities / sum(probabilities); 
+        probabilities = normpdf(epsilon_vector, epsilon_vector(i), sigma);
+        P(i, :) = probabilities / sum(probabilities);
     end
 
     current_state = initial_state;
 
     noisy_I = zeros(size(I));
     states = zeros(size(I));
-    epsilon = zeros(size(I));
 
     for k = 1:length(I)
-        epsilon(k) = epsilon_vector(current_state);
-        noisy_I(k) = I(k) + abs(I(k)) * epsilon(k); 
-        states(k) = current_state; 
+        eps_k = epsilon_vector(current_state);
+        noisy_I(k) = I(k) + abs(I(k)) * eps_k;
+        states(k) = current_state;
         current_state = randsample(1:N, 1, true, P(current_state, :));
     end
 
     final_state = states(end);
 end
-
