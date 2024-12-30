@@ -58,28 +58,28 @@ V_cov = 1e-8; %Voltage_cov(1);
 num_RC = length(tau_discrete);
 
 % P
-Pcov1_init = [ soc_cov 0;
+Pcov1_init = [ soc_cov/50 0;
                0       V_cov ];
-Pcov2_init = [ soc_cov 0       0;
+Pcov2_init = [ soc_cov/5 0       0;
                0       V_cov/4  0;
                0       0        V_cov/4 ]; % [SOC; V1; V2]
 
 Pcov3_init = zeros(1 + num_RC);
-Pcov3_init(1,1) = soc_cov;
+Pcov3_init(1,1) = 5 * soc_cov;
 for i = 2:(1 + num_RC)
     Pcov3_init(i,i) = V_cov/201^2;
 end
 
 % Q
-Qcov1 = [ soc_cov 0;
+Qcov1 = [ soc_cov/50 0;
           0      V_cov ];
 
-Qcov2 = [ soc_cov    0         0;
+Qcov2 = [ soc_cov/5    0         0;
           0         V_cov/4    0;
           0         0          V_cov/4 ];
 
 Qcov3 = zeros(1 + num_RC);
-Qcov3(1,1) =  soc_cov;
+Qcov3(1,1) = 5 * soc_cov;
 for i = 2:(1 + num_RC)
     Qcov3(i,i) = V_cov/201^2;
 end
@@ -145,7 +145,7 @@ previous_trip_end_time = 0;
 
 initial_markov_state = 50;
 
-for s = 1:num_trips-15
+for s = 1:num_trips-1
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
