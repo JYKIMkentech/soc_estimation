@@ -65,7 +65,7 @@ Pcov2_init = [ soc_cov/5 0       0;
                0       0        V_cov/4 ]; % [SOC; V1; V2]
 
 Pcov3_init = zeros(1 + num_RC);
-Pcov3_init(1,1) = 5 * soc_cov;
+Pcov3_init(1,1) =  soc_cov;
 for i = 2:(1 + num_RC)
     Pcov3_init(i,i) = V_cov/201^2;
 end
@@ -79,7 +79,7 @@ Qcov2 = [ soc_cov/5    0         0;
           0         0          V_cov/4 ];
 
 Qcov3 = zeros(1 + num_RC);
-Qcov3(1,1) = 5 * soc_cov;
+Qcov3(1,1) =  soc_cov;
 for i = 2:(1 + num_RC)
     Qcov3(i,i) = V_cov/201^2;
 end
@@ -145,7 +145,7 @@ previous_trip_end_time = 0;
 
 initial_markov_state = 50;
 
-for s = 1:num_trips-1
+for s = 1:num_trips-15
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
