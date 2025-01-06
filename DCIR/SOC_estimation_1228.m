@@ -154,7 +154,7 @@ previous_trip_end_time = 0;
 initial_markov_state  = 50;   % Markov 잡음 초기 상태 (예시)
 
 %% 9) 메인 루프 (각 Trip마다 반복)
-for s = 1:num_trips-4
+for s = 1:num_trips-16
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
