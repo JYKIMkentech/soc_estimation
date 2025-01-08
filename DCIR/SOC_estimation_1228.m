@@ -154,7 +154,7 @@ previous_trip_end_time = 0;
 initial_markov_state  = 50;   % Markov 잡음 초기 상태 (예시)
 
 %% 9) 메인 루프 (각 Trip마다 반복)
-for s = 1:num_trips-16
+for s = 1:num_trips-1
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
@@ -558,9 +558,10 @@ plot(t_all, x_estimate_1RC_all_trips(:,1), '-', 'LineWidth', 3, 'Color', color_1
 plot(t_all, x_estimate_2RC_all_trips(:,1), '-', 'LineWidth', 3, 'Color', color_2rc, 'DisplayName', 'Estimated SOC (2RC)');
 plot(t_all, x_estimate_DRT_all_trips(:,1), '-', 'LineWidth', 3, 'Color', color_drt, 'DisplayName', 'Estimated SOC (DRT)');
 xlabel('Time [s]'); ylabel('SOC');
-title('SOC Comparison Across Models');
+title('SOC comparison across models');
 legend('show', 'Location', 'best');
 hold off;
+
 
 %% (E) SOC Error Comparison
 figure('Name', 'SOC Error Comparison');
@@ -570,7 +571,7 @@ plot(t_all, x_estimate_2RC_all_trips(:,1) - True_SOC_all, '-', 'LineWidth', 3, '
 plot(t_all, x_estimate_DRT_all_trips(:,1) - True_SOC_all, '-', 'LineWidth', 3, 'Color', color_drt, 'DisplayName', 'DRT-KF SOC Error');
 plot(t_all, CC_SOC_all - True_SOC_all,       '-', 'LineWidth', 3, 'Color', color_cc, 'DisplayName', 'CC SOC Error');
 xlabel('Time [s]'); ylabel('SOC Error');
-title('SOC Error Comparison');
+title('SOC error comparison');
 legend('show', 'Location', 'best');
 hold off;
 
