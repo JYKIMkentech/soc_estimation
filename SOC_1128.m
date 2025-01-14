@@ -29,7 +29,7 @@ ocv_values = soc_ocv(:, 2);     % 해당하는 OCV 값 [V] % 1083 x 1
 % 주행 데이터 (17개의 트립)
 load('udds_data.mat'); % 구조체 배열 'udds_data'로 V, I, t, Time_duration, SOC 필드 포함
 
-Q_batt = 2.7742; % [Ah]
+Q_batt = 2.8153; % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc = 0.9907;
 current_noise_percent = 0.05;

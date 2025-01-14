@@ -55,7 +55,7 @@ dOCV_dSOC_values_smooth = movmean(dOCV_dSOC_values, windowSize);
 load('udds_data.mat');           % Struct array 'udds_data' containing fields V, I, t, Time_duration, SOC
 
 %% 배터리 기본 설정
-Q_batt = 2.7742;         % [Ah]
+Q_batt = 2.8153;         % [Ah]
 SOC_begin_true = 0.9907;
 SOC_begin_cc   = 0.9907;
 epsilon_percent_span = 4;         % ex) 0.02 --> 4
@@ -154,7 +154,7 @@ previous_trip_end_time = 0;
 initial_markov_state  = 50;   % Markov 잡음 초기 상태 (예시)
 
 %% 9) 메인 루프 (각 Trip마다 반복)
-for s = 1:num_trips-1
+for s = 1:num_trips-16
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
