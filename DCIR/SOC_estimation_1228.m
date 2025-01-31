@@ -154,7 +154,7 @@ previous_trip_end_time = 0;
 initial_markov_state  = 50;   % Markov 잡음 초기 상태 (예시)
 
 %% 9) 메인 루프 (각 Trip마다 반복)
-for s = 1:num_trips-16
+for s = 1:num_trips-1
     fprintf('Processing Trip %d/%d...\n', s, num_trips);
 
     t = udds_data(s).Time_duration;
@@ -594,6 +594,17 @@ plot(t_all, states_all, '-', 'LineWidth', 1.5);
 xlabel('Time [s]'); ylabel('State Index');
 title('Markov State');
 grid on;
+
+%% Save
+
+% Store newly computed SOC vectors into the struct
+udds_data(s).CC_SOC  = CC_SOC;        % from coulomb-counting
+udds_data(s).SOC_1RC = SOC_est_1RC;   % from 1RC KF
+udds_data(s).SOC_2RC = SOC_est_2RC;   % from 2RC KF
+udds_data(s).SOC_DRT = SOC_est_DRT;   % from DRT-based KF
+
+save('udds_data_updated.mat','udds_data');
+
 
 %%%%%========================================================
 %%%%%   (부록) Markov 노이즈 생성 함수
