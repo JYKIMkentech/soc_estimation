@@ -1,3 +1,4 @@
+
 clc; clear; close all;
 
 %% 데이터 로드
@@ -61,7 +62,7 @@ end
 
 % 초기 SOC 설정 (1로 가정)
 initial_SOC = 1;
-capacity_Ah = 2.7742; % 배터리 용량 (Ah)
+capacity_Ah = 2.633; % 배터리 용량 (Ah)
 
 % Discharge step 구하기
 step_chg = [];
